@@ -9,7 +9,6 @@ using UnityEngine.Rendering.Universal;
 using Unity.Cinemachine;
 using SOTL.API;
 using SOTL.Core;
-using SOTL.Player;
 
 namespace SOTL.Editor
 {
