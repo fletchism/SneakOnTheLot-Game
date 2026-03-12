@@ -6,7 +6,6 @@ using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
-using Unity.Cinemachine;
 using SOTL.API;
 using SOTL.Core;
 
@@ -14,6 +13,11 @@ namespace SOTL.Editor
 {
     public static class LotSceneBuilder
     {
+        const string PLAYER_PREFAB = "Assets/Synty/AnimationBaseLocomotion/Samples/Prefabs/PF_SidekickPlayer.prefab";
+        const string CAMERA_PREFAB = "Assets/Synty/AnimationBaseLocomotion/Samples/Prefabs/PF_SyntyCamera.prefab";
+        const string NPC_PREFAB    = "Assets/Synty/SidekickCharacters/Characters/ModernCivilians/ModernCivilian_01/ModernCivilian_01.prefab";
+        const string IDLE_CTRL     = "Assets/Animations/NPC/AC_NPC_Idle_Masculine.controller";
+
         [MenuItem("SOTL/2 - Build Lot Scene", false, 20)]
         public static void Build()
         {
@@ -22,7 +26,6 @@ namespace SOTL.Editor
             var config = AssetDatabase.LoadAssetAtPath<SOTLConfig>("Assets/Resources/SOTLConfig.asset");
             if (config == null)
             {
-                Debug.Log("[SOTL Scene] SOTLConfig not found — creating it now.");
                 if (!AssetDatabase.IsValidFolder("Assets/Resources"))
                     AssetDatabase.CreateFolder("Assets", "Resources");
                 config = ScriptableObject.CreateInstance<SOTLConfig>();
@@ -30,90 +33,67 @@ namespace SOTL.Editor
                 AssetDatabase.CreateAsset(config, "Assets/Resources/SOTLConfig.asset");
                 AssetDatabase.SaveAssets();
                 AssetDatabase.Refresh();
-                Debug.Log("[SOTL Scene] SOTLConfig created.");
             }
 
-            Debug.Log("[SOTL Scene] Config ready. Creating scene objects...");
             CreateGround();
-            var player = CreatePlayer();
+            CreatePlayer();
+            CreateNPC();
             CreateLighting();
             EnsureEventSystem();
-            CreateStatsUI(player);
+            CreateStatsUI();
             CreateLinkOverlay();
-            CreateManagers(config);
             CreateDialogueUI();
+            CreateManagers(config);
 
             EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
-            Debug.Log("[SOTL Scene] Done. Press PLAY. WASD to move, Tab to open stats panel.");
+            Debug.Log("[SOTL Scene] Done. Save scene (Cmd+S) then hit Play.");
         }
-
-        // ── NPC Idle Controller ───────────────────────────────────────
 
         [MenuItem("SOTL/3 - Create NPC Idle Controller", false, 30)]
         public static void CreateNPCIdleController()
         {
-            // Search for the idle FBX by name anywhere in the project
             var guids = AssetDatabase.FindAssets("A_MOD_BL_Idle_Standing_Masc");
             string fbxPath = null;
             foreach (var guid in guids)
             {
                 var path = AssetDatabase.GUIDToAssetPath(guid);
                 if (path.EndsWith(".fbx", System.StringComparison.OrdinalIgnoreCase))
-                {
-                    fbxPath = path;
-                    break;
-                }
+                { fbxPath = path; break; }
             }
 
             if (fbxPath == null)
             {
-                Debug.LogError("[SOTL] Could not find A_MOD_BL_Idle_Standing_Masc.fbx. Make sure Synty assets are imported.");
+                Debug.LogError("[SOTL] A_MOD_BL_Idle_Standing_Masc.fbx not found.");
                 EditorUtility.DisplayDialog("FBX Not Found",
-                    "A_MOD_BL_Idle_Standing_Masc.fbx was not found in the project.\nMake sure Synty Sidekick assets are imported.", "OK");
+                    "A_MOD_BL_Idle_Standing_Masc.fbx not found. Import Synty Sidekick assets first.", "OK");
                 return;
             }
 
-            Debug.Log($"[SOTL] Found idle FBX at: {fbxPath}");
-
-            // Extract animation clip — skip __preview__ clips Unity auto-generates
             var idleClip = AssetDatabase.LoadAllAssetsAtPath(fbxPath)
                 .OfType<AnimationClip>()
                 .FirstOrDefault(c => !c.name.StartsWith("__preview__"));
 
-            if (idleClip == null)
-            {
-                Debug.LogError($"[SOTL] No AnimationClip found inside {fbxPath}.");
-                return;
-            }
+            if (idleClip == null) { Debug.LogError($"[SOTL] No clip in {fbxPath}."); return; }
 
-            Debug.Log($"[SOTL] Using clip: {idleClip.name}");
-
-            // Create output folder
             if (!AssetDatabase.IsValidFolder("Assets/Animations"))
                 AssetDatabase.CreateFolder("Assets", "Animations");
             if (!AssetDatabase.IsValidFolder("Assets/Animations/NPC"))
                 AssetDatabase.CreateFolder("Assets/Animations", "NPC");
 
-            const string controllerPath = "Assets/Animations/NPC/AC_NPC_Idle_Masculine.controller";
+            var existing = AssetDatabase.LoadAssetAtPath<AnimatorController>(IDLE_CTRL);
+            if (existing != null) AssetDatabase.DeleteAsset(IDLE_CTRL);
 
-            // Overwrite if it already exists
-            var existing = AssetDatabase.LoadAssetAtPath<AnimatorController>(controllerPath);
-            if (existing != null)
-                AssetDatabase.DeleteAsset(controllerPath);
-
-            var controller = AnimatorController.CreateAnimatorControllerAtPath(controllerPath);
+            var controller = AnimatorController.CreateAnimatorControllerAtPath(IDLE_CTRL);
             controller.AddMotion(idleClip);
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
 
-            Debug.Log($"[SOTL] Controller created: {controllerPath}");
+            Debug.Log($"[SOTL] Controller created: {IDLE_CTRL}");
 
-            // Search ALL GameObjects including inactive ones
             int assigned = 0;
             foreach (var go in Resources.FindObjectsOfTypeAll<GameObject>())
             {
-                // skip assets, only scene objects
-                if (UnityEditor.EditorUtility.IsPersistent(go)) continue;
+                if (EditorUtility.IsPersistent(go)) continue;
                 if (go.name == "NPC_Filmmaker" || go.GetComponent("LotNPC") != null)
                 {
                     AssignController(go, controller);
@@ -122,9 +102,9 @@ namespace SOTL.Editor
             }
 
             if (assigned == 0)
-                Debug.LogWarning("[SOTL] No NPC found in scene. Controller saved — assign manually in Inspector.");
+                Debug.LogWarning("[SOTL] No NPC in scene. Controller saved — assign manually.");
             else
-                Debug.Log($"[SOTL] Controller assigned to {assigned} NPC(s). Save scene and hit Play.");
+                Debug.Log($"[SOTL] Assigned to {assigned} NPC(s). Save and hit Play.");
 
             EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
         }
@@ -132,170 +112,90 @@ namespace SOTL.Editor
         static void AssignController(GameObject npc, AnimatorController controller)
         {
             var animator = npc.GetComponentInChildren<Animator>();
-            if (animator == null)
-            {
-                animator = npc.AddComponent<Animator>();
-                Debug.Log($"[SOTL] Added Animator to {npc.name}.");
-            }
+            if (animator == null) animator = npc.AddComponent<Animator>();
             animator.runtimeAnimatorController = controller;
             EditorUtility.SetDirty(animator);
-            Debug.Log($"[SOTL] Assigned AC_NPC_Idle_Masculine.controller to {npc.name}.");
+            Debug.Log($"[SOTL] Idle controller assigned to {npc.name}.");
         }
-
-        [MenuItem("SOTL/4 - Add Dialogue UI", false, 40)]
-        public static void AddDialogueUI()
-        {
-            CreateDialogueUI();
-            EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
-            Debug.Log("[SOTL Scene] Dialogue UI added. Save scene (Cmd+S).");
-        }
-
-        [MenuItem("SOTL/Scene/Clean Rebuild (delete + rebuild)", false, 110)]
-        public static void CleanRebuild()
-        {
-            if (!EditorUtility.DisplayDialog("Clean Rebuild",
-                "WARNING: Only deletes SOTL builder-owned objects.\n" +
-                "Deletes: Ground, SceneLighting, StatsCanvas, LinkOverlayCanvas, DialogueCanvas, [Managers].\n\n" +
-                "Player and NPCs are NOT touched.\n\nProceed?",
-                "Clean Rebuild", "Cancel")) return;
-
-            // Only destroy objects that Build() created — never touch Player or NPCs
-            foreach (var name in new[] { "Ground", "SceneLighting", "StatsCanvas", "LinkOverlayCanvas", "DialogueCanvas", "[Managers]" })
-            {
-                var go = GameObject.Find(name);
-                if (go != null) Object.DestroyImmediate(go);
-            }
-
-            AssetDatabase.Refresh();
-            Build();
-        }
-
-        // ── Ground ────────────────────────────────────────────────────
 
         static void CreateGround()
         {
             if (GameObject.Find("Ground")) return;
-
             var go = GameObject.CreatePrimitive(PrimitiveType.Plane);
             go.name = "Ground";
-            go.transform.position = Vector3.zero;
-            go.transform.localScale = new Vector3(20f, 1f, 20f); // 200x200m lot
-
+            go.transform.localScale = new Vector3(20f, 1f, 20f);
             var mat = new Material(Shader.Find("Universal Render Pipeline/Lit"));
-            mat.color = new Color(0.55f, 0.5f, 0.42f, 1f); // asphalt/concrete
+            mat.color = new Color(0.55f, 0.5f, 0.42f, 1f);
             mat.SetFloat("_Smoothness", 0.05f);
             go.GetComponent<Renderer>().material = mat;
-
             Undo.RegisterCreatedObjectUndo(go, "Create Ground");
-            Debug.Log("[SOTL Scene] Ground created (200x200m).");
+            Debug.Log("[SOTL Scene] Ground created.");
         }
 
-
-        // ── Player ────────────────────────────────────────────────────
-
-        static GameObject CreatePlayer()
+        static void CreatePlayer()
         {
-            if (GameObject.Find("Player")) return GameObject.Find("Player");
+            if (GameObject.Find("PF_SidekickPlayer") || GameObject.Find("SyntyCamera")) return;
 
-            var player = new GameObject("Player");
-            player.transform.position = new Vector3(0f, 0.1f, 0f);
-            player.tag = "Player";
-
-            // Character Controller
-            var cc = player.AddComponent<CharacterController>();
-            cc.height = 1.8f;
-            cc.radius = 0.3f;
-            cc.center = new Vector3(0f, 0.9f, 0f);
-            cc.skinWidth = 0.01f;
-
-            // Capsule visual stand-in until Synty assets imported
-            var capsule = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-            capsule.name = "CharacterModel";
-            capsule.transform.SetParent(player.transform);
-            capsule.transform.localPosition = new Vector3(0f, 0.9f, 0f);
-            Object.DestroyImmediate(capsule.GetComponent<CapsuleCollider>());
-            var mat = new Material(Shader.Find("Universal Render Pipeline/Lit"));
-            mat.color = new Color(0.2f, 0.4f, 0.7f, 1f); // blue placeholder
-            capsule.GetComponent<Renderer>().material = mat;
-
-            // Head target for FPS camera
-            var head = new GameObject("HeadTarget");
-            head.transform.SetParent(player.transform);
-            head.transform.localPosition = new Vector3(0f, 1.65f, 0.1f);
-
-            // TPS pivot
-            var tpsPivot = new GameObject("TPS_Pivot");
-            tpsPivot.transform.SetParent(player.transform);
-            tpsPivot.transform.localPosition = new Vector3(0f, 1.4f, 0f);
-
-            // PlayerController (reflection — LotPlayerController may be in Assembly-CSharp)
-            var playerCtrlType = System.Type.GetType("LotPlayerController") ??
-                                 System.Type.GetType("SOTL.Player.LotPlayerController");
-            if (playerCtrlType != null)
-                player.AddComponent(playerCtrlType);
-
-            // FPS VCam
-            var fpsGO = new GameObject("VCam_FPS");
-            fpsGO.transform.SetParent(player.transform);
-            fpsGO.transform.localPosition = new Vector3(0f, 1.65f, 0.1f);
-            var fpsCam = fpsGO.AddComponent<CinemachineCamera>();
-            fpsCam.Priority = 5;  // TPS is default
-            fpsCam.Follow = head.transform;
-            fpsGO.AddComponent<CinemachineRotateWithFollowTarget>();
-
-            // TPS VCam
-            var tpsGO = new GameObject("VCam_TPS");
-            tpsGO.transform.SetParent(player.transform);
-            var tpsCam = tpsGO.AddComponent<CinemachineCamera>();
-            tpsCam.Priority = 10; // TPS is default
-            tpsCam.Follow = tpsPivot.transform;
-            var tpsFollow = tpsGO.AddComponent<CinemachineThirdPersonFollow>();
-            tpsFollow.ShoulderOffset = new Vector3(0.5f, 0f, 0f);
-            tpsFollow.CameraDistance = 3.5f;
-            tpsGO.AddComponent<CinemachineRotateWithFollowTarget>();
-
-            // Wire cam refs into controller via reflection
-            var ctrl = player.GetComponent(playerCtrlType);
-            if (ctrl != null)
+            var camPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(CAMERA_PREFAB);
+            if (camPrefab != null)
             {
-                SetField(ctrl, "_fpsCam", fpsCam);
-                SetField(ctrl, "_tpsCam", tpsCam);
-                SetField(ctrl, "_tpsPivot", tpsPivot.transform);
+                var cam = (GameObject)PrefabUtility.InstantiatePrefab(camPrefab);
+                cam.name = "SyntyCamera";
+                Undo.RegisterCreatedObjectUndo(cam, "Create Camera");
+                Debug.Log("[SOTL Scene] SyntyCamera instantiated.");
+            }
+            else Debug.LogWarning($"[SOTL Scene] Camera prefab not found: {CAMERA_PREFAB}");
+
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(PLAYER_PREFAB);
+            if (prefab != null)
+            {
+                var player = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
+                player.transform.position = Vector3.zero;
+                player.tag = "Player";
+                Undo.RegisterCreatedObjectUndo(player, "Create Player");
+                Debug.Log("[SOTL Scene] PF_SidekickPlayer instantiated.");
+            }
+            else Debug.LogWarning($"[SOTL Scene] Player prefab not found: {PLAYER_PREFAB}");
+        }
+
+        static void CreateNPC()
+        {
+            if (GameObject.Find("NPC_Filmmaker")) return;
+
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(NPC_PREFAB);
+            if (prefab == null)
+            {
+                Debug.LogWarning($"[SOTL Scene] NPC prefab not found: {NPC_PREFAB}");
+                return;
             }
 
-            SetupCinemachineBrain();
+            var npc = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
+            npc.name = "NPC_Filmmaker";
+            npc.transform.position = new Vector3(3f, 0f, 3f);
+            npc.transform.rotation = Quaternion.Euler(0f, 225f, 0f);
 
-            Undo.RegisterCreatedObjectUndo(player, "Create Player");
-            Debug.Log("[SOTL Scene] Player created.");
-            return player;
+            var lotNpcType = System.Type.GetType("LotNPC, Assembly-CSharp");
+            if (lotNpcType != null)
+                npc.AddComponent(lotNpcType);
+            else
+                Debug.LogWarning("[SOTL Scene] LotNPC type not found — add manually.");
+
+            var controller = AssetDatabase.LoadAssetAtPath<AnimatorController>(IDLE_CTRL);
+            if (controller != null)
+                AssignController(npc, controller);
+            else
+                Debug.LogWarning("[SOTL Scene] Idle controller not found — run SOTL/3 first, then SOTL/2.");
+
+            Undo.RegisterCreatedObjectUndo(npc, "Create NPC");
+            Debug.Log("[SOTL Scene] NPC_Filmmaker created.");
         }
-
-        static void SetupCinemachineBrain()
-        {
-            var mainCam = Camera.main;
-            if (mainCam == null)
-            {
-                var camGO = new GameObject("Main Camera");
-                camGO.tag = "MainCamera";
-                mainCam = camGO.AddComponent<Camera>();
-            }
-            if (mainCam.GetComponent<CinemachineBrain>() == null)
-                mainCam.gameObject.AddComponent<CinemachineBrain>();
-        }
-
-
-        // ── Lighting ──────────────────────────────────────────────────
 
         static void CreateLighting()
         {
             if (GameObject.Find("SceneLighting")) return;
-
             var root = new GameObject("SceneLighting");
-
-            // Remove default directional lights
             foreach (var l in Object.FindObjectsByType<Light>(FindObjectsSortMode.None))
                 if (l.type == LightType.Directional) Object.DestroyImmediate(l.gameObject);
-
             var sunGO = new GameObject("Sun");
             sunGO.transform.SetParent(root.transform);
             sunGO.transform.rotation = Quaternion.Euler(50f, -20f, 0f);
@@ -306,19 +206,16 @@ namespace SOTL.Editor
             sun.shadows = LightShadows.Soft;
             RenderSettings.sun = sun;
             RenderSettings.ambientMode = AmbientMode.Trilight;
-            RenderSettings.ambientSkyColor = new Color(0.6f, 0.7f, 0.9f);
+            RenderSettings.ambientSkyColor    = new Color(0.6f, 0.7f, 0.9f);
             RenderSettings.ambientEquatorColor = new Color(0.5f, 0.55f, 0.6f);
-            RenderSettings.ambientGroundColor = new Color(0.3f, 0.28f, 0.22f);
+            RenderSettings.ambientGroundColor  = new Color(0.3f, 0.28f, 0.22f);
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.Linear;
             RenderSettings.fogStartDistance = 60f;
-            RenderSettings.fogEndDistance = 200f;
-
+            RenderSettings.fogEndDistance   = 200f;
             Undo.RegisterCreatedObjectUndo(root, "Create Lighting");
             Debug.Log("[SOTL Scene] Lighting configured.");
         }
-
-        // ── Event System ──────────────────────────────────────────────
 
         static void EnsureEventSystem()
         {
@@ -327,230 +224,7 @@ namespace SOTL.Editor
             go.AddComponent<UnityEngine.EventSystems.EventSystem>();
             go.AddComponent<UnityEngine.InputSystem.UI.InputSystemUIInputModule>();
             Undo.RegisterCreatedObjectUndo(go, "Create EventSystem");
-            Debug.Log("[SOTL Scene] EventSystem created.");
         }
-
-        // ── Link Overlay ──────────────────────────────────────────────
-
-        static void CreateLinkOverlay()
-        {
-            if (GameObject.Find("LinkOverlayCanvas")) return;
-
-            var canvasGO = new GameObject("LinkOverlayCanvas");
-            var canvas = canvasGO.AddComponent<Canvas>();
-            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = 10; // above StatsCanvas
-            canvasGO.AddComponent<UnityEngine.UI.CanvasScaler>();
-            canvasGO.AddComponent<UnityEngine.UI.GraphicRaycaster>();
-
-            // Dark full-screen background
-            var bg = new GameObject("Background", typeof(RectTransform));
-            bg.transform.SetParent(canvasGO.transform, false);
-            var bgRT = bg.GetComponent<RectTransform>();
-            bgRT.anchorMin = Vector2.zero; bgRT.anchorMax = Vector2.one;
-            bgRT.offsetMin = Vector2.zero; bgRT.offsetMax = Vector2.zero;
-            var bgImg = bg.AddComponent<UnityEngine.UI.Image>();
-            bgImg.color = new Color(0f, 0f, 0f, 0.85f);
-
-            // Center panel
-            var panel = new GameObject("Panel", typeof(RectTransform));
-            panel.transform.SetParent(canvasGO.transform, false);
-            var pRT = panel.GetComponent<RectTransform>();
-            pRT.anchorMin = pRT.anchorMax = pRT.pivot = new Vector2(0.5f, 0.5f);
-            pRT.sizeDelta = new Vector2(480f, 380f);
-            pRT.anchoredPosition = Vector2.zero;
-            var pImg = panel.AddComponent<UnityEngine.UI.Image>();
-            pImg.color = new Color(0.08f, 0.08f, 0.12f, 0.98f);
-
-            // Title
-            var title = CreateLabel(panel.transform, "TitleLabel",
-                "SNEAK ON THE LOT", new Vector2(0, -30));
-            title.fontSize = 28; title.color = new Color(1f, 0.75f, 0.2f);
-
-            var sub = CreateLabel(panel.transform, "SubLabel",
-                "Link your account to track XP, Fame & Prestige", new Vector2(0, -75));
-            sub.fontSize = 18; sub.color = new Color(0.8f, 0.8f, 0.8f);
-
-            // Input field
-            var inputGO = new GameObject("CodeInput", typeof(RectTransform));
-            inputGO.transform.SetParent(panel.transform, false);
-            var inputRT = inputGO.GetComponent<RectTransform>();
-            inputRT.anchorMin = inputRT.anchorMax = new Vector2(0.5f, 1f);
-            inputRT.pivot = new Vector2(0.5f, 1f);
-            inputRT.sizeDelta = new Vector2(380f, 48f);
-            inputRT.anchoredPosition = new Vector2(0, -125);
-            var inputBG = inputGO.AddComponent<UnityEngine.UI.Image>();
-            inputBG.color = new Color(0.15f, 0.15f, 0.2f);
-            var inputField = inputGO.AddComponent<UnityEngine.UI.InputField>();
-
-            // Placeholder
-            var placeholder = CreateLabel(inputGO.transform, "Placeholder", "Enter link code…", Vector2.zero);
-            placeholder.color = new Color(0.5f, 0.5f, 0.5f);
-            placeholder.fontSize = 20;
-            var placeholderRT = placeholder.GetComponent<RectTransform>();
-            placeholderRT.anchorMin = Vector2.zero; placeholderRT.anchorMax = Vector2.one;
-            placeholderRT.offsetMin = new Vector2(8, 0); placeholderRT.offsetMax = Vector2.zero;
-
-            // Text
-            var textComp = CreateLabel(inputGO.transform, "Text", "", Vector2.zero);
-            textComp.fontSize = 20;
-            var textRT = textComp.GetComponent<RectTransform>();
-            textRT.anchorMin = Vector2.zero; textRT.anchorMax = Vector2.one;
-            textRT.offsetMin = new Vector2(8, 0); textRT.offsetMax = Vector2.zero;
-
-            inputField.placeholder = placeholder;
-            inputField.textComponent = textComp;
-
-            // Link button
-            var btnGO = new GameObject("LinkButton", typeof(RectTransform));
-            btnGO.transform.SetParent(panel.transform, false);
-            var btnRT = btnGO.GetComponent<RectTransform>();
-            btnRT.anchorMin = btnRT.anchorMax = new Vector2(0.5f, 1f);
-            btnRT.pivot = new Vector2(0.5f, 1f);
-            btnRT.sizeDelta = new Vector2(200f, 50f);
-            btnRT.anchoredPosition = new Vector2(0, -190);
-            var btnImg = btnGO.AddComponent<UnityEngine.UI.Image>();
-            btnImg.color = new Color(0.2f, 0.6f, 1f);
-            var btn = btnGO.AddComponent<UnityEngine.UI.Button>();
-            btn.targetGraphic = btnImg;
-            var btnLabel = CreateLabel(btnGO.transform, "ButtonLabel", "Link Account", Vector2.zero);
-            btnLabel.fontSize = 20;
-            var btnLabelRT = btnLabel.GetComponent<RectTransform>();
-            btnLabelRT.anchorMin = Vector2.zero; btnLabelRT.anchorMax = Vector2.one;
-            btnLabelRT.offsetMin = btnLabelRT.offsetMax = Vector2.zero;
-
-            // Status text
-            var status = CreateLabel(panel.transform, "StatusText", "", new Vector2(0, -255));
-            status.fontSize = 18;
-
-            // Skip button (play without linking)
-            var skipGO = new GameObject("SkipButton", typeof(RectTransform));
-            skipGO.transform.SetParent(panel.transform, false);
-            var skipRT = skipGO.GetComponent<RectTransform>();
-            skipRT.anchorMin = skipRT.anchorMax = new Vector2(0.5f, 1f);
-            skipRT.pivot = new Vector2(0.5f, 1f);
-            skipRT.sizeDelta = new Vector2(160f, 36f);
-            skipRT.anchoredPosition = new Vector2(0, -290);
-            var skipBtn = skipGO.AddComponent<UnityEngine.UI.Button>();
-            var skipLabel = CreateLabel(skipGO.transform, "SkipLabel", "Play without linking", Vector2.zero);
-            skipLabel.fontSize = 16; skipLabel.color = new Color(0.6f, 0.6f, 0.6f);
-            skipBtn.onClick.AddListener(() => canvasGO.SetActive(false));
-
-            // Wire LinkOverlay component
-            var overlayType = System.Type.GetType("SOTL.UI.LinkOverlay, SOTL.UI");
-            if (overlayType != null)
-            {
-                var overlay = canvasGO.AddComponent(overlayType);
-                SetField(overlay, "_codeInput",  inputField);
-                SetField(overlay, "_statusText", status);
-                SetField(overlay, "_linkButton", btn);
-            }
-            else
-            {
-                Debug.LogWarning("[SOTL Scene] LinkOverlay type not found — recompile and rebuild.");
-            }
-
-            Undo.RegisterCreatedObjectUndo(canvasGO, "Create Link Overlay");
-            Debug.Log("[SOTL Scene] Link overlay created.");
-        }
-
-        // ── Stats UI ──────────────────────────────────────────────────
-
-        static void CreateStatsUI(GameObject player)
-        {
-            if (GameObject.Find("StatsCanvas")) return;
-
-            var canvasGO = new GameObject("StatsCanvas");
-            var canvas = canvasGO.AddComponent<Canvas>();
-            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvasGO.AddComponent<UnityEngine.UI.CanvasScaler>();
-            canvasGO.AddComponent<UnityEngine.UI.GraphicRaycaster>();
-
-            // Stats panel (hidden by default, Tab to toggle)
-            var panelGO = new GameObject("StatsPanel", typeof(RectTransform));
-            panelGO.transform.SetParent(canvasGO.transform, false);
-            var panelRT = panelGO.GetComponent<RectTransform>();
-            panelRT.anchorMin = new Vector2(0.5f, 0.5f);
-            panelRT.anchorMax = new Vector2(0.5f, 0.5f);
-            panelRT.pivot = new Vector2(0.5f, 0.5f);
-            panelRT.sizeDelta = new Vector2(400f, 320f);
-            panelRT.anchoredPosition = Vector2.zero;
-            var panelBG = panelGO.AddComponent<UnityEngine.UI.Image>();
-            panelBG.color = new Color(0.05f, 0.05f, 0.07f, 0.92f);
-            panelGO.SetActive(false);
-
-            // Sub-panels for linked / not linked states
-            var linkedPanel    = CreateChildPanel(panelGO.transform, "LinkedPanel");
-            var linkPrompt     = CreateChildPanel(panelGO.transform, "LinkPromptPanel");
-
-            // Labels inside linkedPanel
-            var xpLabel        = CreateLabel(linkedPanel.transform,   "XPLabel",       "XP: —",       new Vector2(0, -60));
-            var levelLabel     = CreateLabel(linkedPanel.transform,   "LevelLabel",    "Level —",     new Vector2(0, -100));
-            var fameLabel      = CreateLabel(linkedPanel.transform,   "FameLabel",     "Fame: —",     new Vector2(0, -140));
-            var prestigeLabel  = CreateLabel(linkedPanel.transform,   "PrestigeLabel", "Prestige: —", new Vector2(0, -180));
-
-            // Link prompt text
-            CreateLabel(linkPrompt.transform, "PromptText",
-                "Open sneakonthelot.com/my-stats\nand click Link Unity Account\nto connect your SOTL profile.",
-                new Vector2(0, -80));
-            var statusLabel = CreateLabel(panelGO.transform, "StatusLabel", "", new Vector2(0, 120));
-
-            // StatsPanelToggler — self-wiring via StatsPanelToggler.Start()
-            var togglerGO = canvasGO.AddComponent(System.Type.GetType("SOTL.UI.StatsPanelToggler, SOTL.UI"));
-
-            Undo.RegisterCreatedObjectUndo(canvasGO, "Create Stats Canvas");
-            Debug.Log("[SOTL Scene] Stats UI created. Tab to toggle.");
-        }
-
-        static GameObject CreateChildPanel(Transform parent, string name)
-        {
-            var go = new GameObject(name, typeof(RectTransform));
-            go.transform.SetParent(parent, false);
-            var rt = go.GetComponent<RectTransform>();
-            rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
-            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
-            return go;
-        }
-
-        static UnityEngine.UI.Text CreateLabel(Transform parent, string name, string text, Vector2 pos)
-        {
-            var go = new GameObject(name, typeof(RectTransform));
-            go.transform.SetParent(parent, false);
-            var rt = go.GetComponent<RectTransform>();
-            rt.anchoredPosition = pos; rt.sizeDelta = new Vector2(360, 40);
-            rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 1f); rt.pivot = new Vector2(0.5f, 1f);
-            var t = go.AddComponent<UnityEngine.UI.Text>();
-            t.text = text;
-            t.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            t.fontSize = 22; t.color = Color.white;
-            t.alignment = TextAnchor.MiddleCenter;
-            return t;
-        }
-
-        // ── Managers ──────────────────────────────────────────────────
-
-        static void CreateManagers(SOTLConfig config)
-        {
-            if (GameObject.Find("[Managers]")) return;
-
-            var root = new GameObject("[Managers]");
-
-            // GameManager
-            root.AddComponent<GameManager>();
-
-            // SOTLApiManager
-            var apiGO = new GameObject("SOTLApiManager");
-            apiGO.transform.SetParent(root.transform);
-            var api = apiGO.AddComponent<SOTLApiManager>();
-            var so = new SerializedObject(api);
-            so.FindProperty("config").objectReferenceValue = config;
-            so.ApplyModifiedPropertiesWithoutUndo();
-
-            Undo.RegisterCreatedObjectUndo(root, "Create Managers");
-            Debug.Log("[SOTL Scene] Managers created.");
-        }
-
-        // ── Dialogue UI ───────────────────────────────────────────────
 
         static void CreateDialogueUI()
         {
@@ -563,7 +237,6 @@ namespace SOTL.Editor
             canvasGO.AddComponent<UnityEngine.UI.CanvasScaler>();
             canvasGO.AddComponent<UnityEngine.UI.GraphicRaycaster>();
 
-            // ── Prompt (bottom-center) ────────────────────────────────
             var promptRoot = new GameObject("PromptRoot", typeof(RectTransform));
             promptRoot.transform.SetParent(canvasGO.transform, false);
             var promptRT = promptRoot.GetComponent<RectTransform>();
@@ -572,8 +245,7 @@ namespace SOTL.Editor
             promptRT.pivot     = new Vector2(0.5f, 0f);
             promptRT.sizeDelta = new Vector2(400f, 50f);
             promptRT.anchoredPosition = new Vector2(0f, 80f);
-            var promptBG = promptRoot.AddComponent<UnityEngine.UI.Image>();
-            promptBG.color = new Color(0f, 0f, 0f, 0.6f);
+            promptRoot.AddComponent<UnityEngine.UI.Image>().color = new Color(0f, 0f, 0f, 0.6f);
             var promptText = CreateLabel(promptRoot.transform, "PromptText", "[E]  Talk to NPC", Vector2.zero);
             promptText.fontSize = 22;
             var promptTextRT = promptText.GetComponent<RectTransform>();
@@ -581,7 +253,6 @@ namespace SOTL.Editor
             promptTextRT.offsetMin = promptTextRT.offsetMax = Vector2.zero;
             promptRoot.SetActive(false);
 
-            // ── Dialogue panel (bottom) ───────────────────────────────
             var panelRoot = new GameObject("DialoguePanel", typeof(RectTransform));
             panelRoot.transform.SetParent(canvasGO.transform, false);
             var panelRT = panelRoot.GetComponent<RectTransform>();
@@ -590,10 +261,9 @@ namespace SOTL.Editor
             panelRT.pivot     = new Vector2(0.5f, 0f);
             panelRT.sizeDelta = new Vector2(0f, 180f);
             panelRT.anchoredPosition = Vector2.zero;
-            var panelBG = panelRoot.AddComponent<UnityEngine.UI.Image>();
-            panelBG.color = new Color(0.05f, 0.05f, 0.1f, 0.92f);
+            panelRoot.AddComponent<UnityEngine.UI.Image>().color = new Color(0.05f, 0.05f, 0.1f, 0.92f);
 
-            var nameText = CreateLabel(panelRoot.transform, "NameText", "NPC", new Vector2(0f, -10f));
+            var nameText = CreateLabel(panelRoot.transform, "NameText", "NPC", Vector2.zero);
             nameText.fontSize = 20; nameText.color = new Color(1f, 0.75f, 0.2f);
             nameText.fontStyle = UnityEngine.FontStyle.Bold;
             var nameRT = nameText.GetComponent<RectTransform>();
@@ -602,7 +272,7 @@ namespace SOTL.Editor
             nameRT.sizeDelta = new Vector2(0f, 30f);
             nameRT.anchoredPosition = new Vector2(0f, -10f);
 
-            var lineText = CreateLabel(panelRoot.transform, "LineText", "", new Vector2(0f, -50f));
+            var lineText = CreateLabel(panelRoot.transform, "LineText", "", Vector2.zero);
             lineText.fontSize = 20; lineText.alignment = TextAnchor.UpperLeft;
             var lineRT = lineText.GetComponent<RectTransform>();
             lineRT.anchorMin = new Vector2(0f, 1f); lineRT.anchorMax = new Vector2(1f, 1f);
@@ -618,10 +288,8 @@ namespace SOTL.Editor
             hintRT.pivot = new Vector2(0.5f, 0f);
             hintRT.sizeDelta = new Vector2(-40f, 30f);
             hintRT.anchoredPosition = new Vector2(0f, 10f);
-
             panelRoot.SetActive(false);
 
-            // ── Wire LotDialogueUI component ──────────────────────────
             var uiType = System.Type.GetType("SOTL.NPC.LotDialogueUI, Assembly-CSharp");
             if (uiType != null)
             {
@@ -634,16 +302,178 @@ namespace SOTL.Editor
                 SetField(ui, "_continueHint", hintText);
                 Debug.Log("[SOTL Scene] DialogueUI wired.");
             }
-            else
-            {
-                Debug.LogWarning("[SOTL Scene] LotDialogueUI type not found — recompile and rebuild.");
-            }
+            else Debug.LogWarning("[SOTL Scene] LotDialogueUI not found — recompile and run Build again.");
 
             Undo.RegisterCreatedObjectUndo(canvasGO, "Create Dialogue UI");
             Debug.Log("[SOTL Scene] Dialogue canvas created.");
         }
 
-        // ── Reflection helper ─────────────────────────────────────────
+        static void CreateLinkOverlay()
+        {
+            if (GameObject.Find("LinkOverlayCanvas")) return;
+
+            var canvasGO = new GameObject("LinkOverlayCanvas");
+            var canvas = canvasGO.AddComponent<Canvas>();
+            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            canvas.sortingOrder = 10;
+            canvasGO.AddComponent<UnityEngine.UI.CanvasScaler>();
+            canvasGO.AddComponent<UnityEngine.UI.GraphicRaycaster>();
+
+            var bg = new GameObject("Background", typeof(RectTransform));
+            bg.transform.SetParent(canvasGO.transform, false);
+            var bgRT = bg.GetComponent<RectTransform>();
+            bgRT.anchorMin = Vector2.zero; bgRT.anchorMax = Vector2.one;
+            bgRT.offsetMin = bgRT.offsetMax = Vector2.zero;
+            bg.AddComponent<UnityEngine.UI.Image>().color = new Color(0f, 0f, 0f, 0.85f);
+
+            var panel = new GameObject("Panel", typeof(RectTransform));
+            panel.transform.SetParent(canvasGO.transform, false);
+            var pRT = panel.GetComponent<RectTransform>();
+            pRT.anchorMin = pRT.anchorMax = pRT.pivot = new Vector2(0.5f, 0.5f);
+            pRT.sizeDelta = new Vector2(480f, 380f);
+            panel.AddComponent<UnityEngine.UI.Image>().color = new Color(0.08f, 0.08f, 0.12f, 0.98f);
+
+            var title = CreateLabel(panel.transform, "TitleLabel", "SNEAK ON THE LOT", new Vector2(0, -30));
+            title.fontSize = 28; title.color = new Color(1f, 0.75f, 0.2f);
+            var sub = CreateLabel(panel.transform, "SubLabel", "Link your account to track XP, Fame & Prestige", new Vector2(0, -75));
+            sub.fontSize = 18; sub.color = new Color(0.8f, 0.8f, 0.8f);
+
+            var inputGO = new GameObject("CodeInput", typeof(RectTransform));
+            inputGO.transform.SetParent(panel.transform, false);
+            var inputRT = inputGO.GetComponent<RectTransform>();
+            inputRT.anchorMin = inputRT.anchorMax = new Vector2(0.5f, 1f);
+            inputRT.pivot = new Vector2(0.5f, 1f);
+            inputRT.sizeDelta = new Vector2(380f, 48f);
+            inputRT.anchoredPosition = new Vector2(0, -125);
+            inputGO.AddComponent<UnityEngine.UI.Image>().color = new Color(0.15f, 0.15f, 0.2f);
+            var inputField = inputGO.AddComponent<UnityEngine.UI.InputField>();
+            var ph = CreateLabel(inputGO.transform, "Placeholder", "Enter link code…", Vector2.zero);
+            ph.color = new Color(0.5f, 0.5f, 0.5f); ph.fontSize = 20;
+            var phRT = ph.GetComponent<RectTransform>();
+            phRT.anchorMin = Vector2.zero; phRT.anchorMax = Vector2.one;
+            phRT.offsetMin = new Vector2(8, 0); phRT.offsetMax = Vector2.zero;
+            var tc = CreateLabel(inputGO.transform, "Text", "", Vector2.zero);
+            tc.fontSize = 20;
+            var tcRT = tc.GetComponent<RectTransform>();
+            tcRT.anchorMin = Vector2.zero; tcRT.anchorMax = Vector2.one;
+            tcRT.offsetMin = new Vector2(8, 0); tcRT.offsetMax = Vector2.zero;
+            inputField.placeholder = ph; inputField.textComponent = tc;
+
+            var btnGO = new GameObject("LinkButton", typeof(RectTransform));
+            btnGO.transform.SetParent(panel.transform, false);
+            var btnRT = btnGO.GetComponent<RectTransform>();
+            btnRT.anchorMin = btnRT.anchorMax = new Vector2(0.5f, 1f);
+            btnRT.pivot = new Vector2(0.5f, 1f);
+            btnRT.sizeDelta = new Vector2(200f, 50f);
+            btnRT.anchoredPosition = new Vector2(0, -190);
+            var btnImg = btnGO.AddComponent<UnityEngine.UI.Image>();
+            btnImg.color = new Color(0.2f, 0.6f, 1f);
+            var btn = btnGO.AddComponent<UnityEngine.UI.Button>();
+            btn.targetGraphic = btnImg;
+            var bl = CreateLabel(btnGO.transform, "ButtonLabel", "Link Account", Vector2.zero);
+            bl.fontSize = 20;
+            var blRT = bl.GetComponent<RectTransform>();
+            blRT.anchorMin = Vector2.zero; blRT.anchorMax = Vector2.one;
+            blRT.offsetMin = blRT.offsetMax = Vector2.zero;
+
+            var status = CreateLabel(panel.transform, "StatusText", "", new Vector2(0, -255));
+            status.fontSize = 18;
+
+            var skipGO = new GameObject("SkipButton", typeof(RectTransform));
+            skipGO.transform.SetParent(panel.transform, false);
+            var skipRT = skipGO.GetComponent<RectTransform>();
+            skipRT.anchorMin = skipRT.anchorMax = new Vector2(0.5f, 1f);
+            skipRT.pivot = new Vector2(0.5f, 1f);
+            skipRT.sizeDelta = new Vector2(160f, 36f);
+            skipRT.anchoredPosition = new Vector2(0, -290);
+            var skipBtn = skipGO.AddComponent<UnityEngine.UI.Button>();
+            var skipLabel = CreateLabel(skipGO.transform, "SkipLabel", "Play without linking", Vector2.zero);
+            skipLabel.fontSize = 16; skipLabel.color = new Color(0.6f, 0.6f, 0.6f);
+            skipBtn.onClick.AddListener(() => canvasGO.SetActive(false));
+
+            var overlayType = System.Type.GetType("SOTL.UI.LinkOverlay, SOTL.UI");
+            if (overlayType != null)
+            {
+                var overlay = canvasGO.AddComponent(overlayType);
+                SetField(overlay, "_codeInput",  inputField);
+                SetField(overlay, "_statusText", status);
+                SetField(overlay, "_linkButton", btn);
+            }
+
+            Undo.RegisterCreatedObjectUndo(canvasGO, "Create Link Overlay");
+            Debug.Log("[SOTL Scene] Link overlay created.");
+        }
+
+        static void CreateStatsUI()
+        {
+            if (GameObject.Find("StatsCanvas")) return;
+
+            var canvasGO = new GameObject("StatsCanvas");
+            canvasGO.AddComponent<Canvas>().renderMode = RenderMode.ScreenSpaceOverlay;
+            canvasGO.AddComponent<UnityEngine.UI.CanvasScaler>();
+            canvasGO.AddComponent<UnityEngine.UI.GraphicRaycaster>();
+
+            var panelGO = new GameObject("StatsPanel", typeof(RectTransform));
+            panelGO.transform.SetParent(canvasGO.transform, false);
+            var panelRT = panelGO.GetComponent<RectTransform>();
+            panelRT.anchorMin = panelRT.anchorMax = panelRT.pivot = new Vector2(0.5f, 0.5f);
+            panelRT.sizeDelta = new Vector2(400f, 320f);
+            panelGO.AddComponent<UnityEngine.UI.Image>().color = new Color(0.05f, 0.05f, 0.07f, 0.92f);
+            panelGO.SetActive(false);
+
+            var linked = CreateChildPanel(panelGO.transform, "LinkedPanel");
+            CreateChildPanel(panelGO.transform, "LinkPromptPanel");
+            CreateLabel(linked.transform,   "XPLabel",       "XP: —",       new Vector2(0, -60));
+            CreateLabel(linked.transform,   "LevelLabel",    "Level —",     new Vector2(0, -100));
+            CreateLabel(linked.transform,   "FameLabel",     "Fame: —",     new Vector2(0, -140));
+            CreateLabel(linked.transform,   "PrestigeLabel", "Prestige: —", new Vector2(0, -180));
+            CreateLabel(panelGO.transform,  "StatusLabel",   "",            new Vector2(0, 120));
+
+            canvasGO.AddComponent(System.Type.GetType("SOTL.UI.StatsPanelToggler, SOTL.UI"));
+            Undo.RegisterCreatedObjectUndo(canvasGO, "Create Stats Canvas");
+            Debug.Log("[SOTL Scene] Stats UI created.");
+        }
+
+        static void CreateManagers(SOTLConfig config)
+        {
+            if (GameObject.Find("[Managers]")) return;
+            var root = new GameObject("[Managers]");
+            root.AddComponent<GameManager>();
+            var apiGO = new GameObject("SOTLApiManager");
+            apiGO.transform.SetParent(root.transform);
+            var api = apiGO.AddComponent<SOTLApiManager>();
+            var so = new SerializedObject(api);
+            so.FindProperty("config").objectReferenceValue = config;
+            so.ApplyModifiedPropertiesWithoutUndo();
+            Undo.RegisterCreatedObjectUndo(root, "Create Managers");
+            Debug.Log("[SOTL Scene] Managers created.");
+        }
+
+        static GameObject CreateChildPanel(Transform parent, string name)
+        {
+            var go = new GameObject(name, typeof(RectTransform));
+            go.transform.SetParent(parent, false);
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
+            rt.offsetMin = rt.offsetMax = Vector2.zero;
+            return go;
+        }
+
+        static UnityEngine.UI.Text CreateLabel(Transform parent, string name, string text, Vector2 pos)
+        {
+            var go = new GameObject(name, typeof(RectTransform));
+            go.transform.SetParent(parent, false);
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchoredPosition = pos; rt.sizeDelta = new Vector2(360, 40);
+            rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 1f);
+            rt.pivot = new Vector2(0.5f, 1f);
+            var t = go.AddComponent<UnityEngine.UI.Text>();
+            t.text = text;
+            t.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            t.fontSize = 22; t.color = Color.white;
+            t.alignment = TextAnchor.MiddleCenter;
+            return t;
+        }
 
         static void SetField(object obj, string fieldName, object value)
         {
