@@ -41,6 +41,7 @@ namespace SOTL.Editor
             CreateStatsUI(player);
             CreateLinkOverlay();
             CreateManagers(config);
+            CreateDialogueUI();
 
             EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
             Debug.Log("[SOTL Scene] Done. Press PLAY. WASD to move, Tab to open stats panel.");
@@ -536,6 +537,99 @@ namespace SOTL.Editor
 
             Undo.RegisterCreatedObjectUndo(root, "Create Managers");
             Debug.Log("[SOTL Scene] Managers created.");
+        }
+
+        // ── Dialogue UI ───────────────────────────────────────────────
+
+        static void CreateDialogueUI()
+        {
+            if (GameObject.Find("DialogueCanvas")) return;
+
+            var canvasGO = new GameObject("DialogueCanvas");
+            var canvas = canvasGO.AddComponent<Canvas>();
+            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            canvas.sortingOrder = 5;
+            canvasGO.AddComponent<UnityEngine.UI.CanvasScaler>();
+            canvasGO.AddComponent<UnityEngine.UI.GraphicRaycaster>();
+
+            // ── Prompt (bottom-center) ────────────────────────────────
+            var promptRoot = new GameObject("PromptRoot", typeof(RectTransform));
+            promptRoot.transform.SetParent(canvasGO.transform, false);
+            var promptRT = promptRoot.GetComponent<RectTransform>();
+            promptRT.anchorMin = new Vector2(0.5f, 0f);
+            promptRT.anchorMax = new Vector2(0.5f, 0f);
+            promptRT.pivot     = new Vector2(0.5f, 0f);
+            promptRT.sizeDelta = new Vector2(400f, 50f);
+            promptRT.anchoredPosition = new Vector2(0f, 80f);
+            var promptBG = promptRoot.AddComponent<UnityEngine.UI.Image>();
+            promptBG.color = new Color(0f, 0f, 0f, 0.6f);
+            var promptText = CreateLabel(promptRoot.transform, "PromptText", "[E]  Talk to NPC", Vector2.zero);
+            promptText.fontSize = 22;
+            var promptTextRT = promptText.GetComponent<RectTransform>();
+            promptTextRT.anchorMin = Vector2.zero; promptTextRT.anchorMax = Vector2.one;
+            promptTextRT.offsetMin = promptTextRT.offsetMax = Vector2.zero;
+            promptRoot.SetActive(false);
+
+            // ── Dialogue panel (bottom) ───────────────────────────────
+            var panelRoot = new GameObject("DialoguePanel", typeof(RectTransform));
+            panelRoot.transform.SetParent(canvasGO.transform, false);
+            var panelRT = panelRoot.GetComponent<RectTransform>();
+            panelRT.anchorMin = new Vector2(0f, 0f);
+            panelRT.anchorMax = new Vector2(1f, 0f);
+            panelRT.pivot     = new Vector2(0.5f, 0f);
+            panelRT.sizeDelta = new Vector2(0f, 180f);
+            panelRT.anchoredPosition = Vector2.zero;
+            var panelBG = panelRoot.AddComponent<UnityEngine.UI.Image>();
+            panelBG.color = new Color(0.05f, 0.05f, 0.1f, 0.92f);
+
+            var nameText = CreateLabel(panelRoot.transform, "NameText", "NPC", new Vector2(0f, -10f));
+            nameText.fontSize = 20; nameText.color = new Color(1f, 0.75f, 0.2f);
+            nameText.fontStyle = UnityEngine.FontStyle.Bold;
+            var nameRT = nameText.GetComponent<RectTransform>();
+            nameRT.anchorMin = new Vector2(0f, 1f); nameRT.anchorMax = new Vector2(1f, 1f);
+            nameRT.pivot = new Vector2(0.5f, 1f);
+            nameRT.sizeDelta = new Vector2(0f, 30f);
+            nameRT.anchoredPosition = new Vector2(0f, -10f);
+
+            var lineText = CreateLabel(panelRoot.transform, "LineText", "", new Vector2(0f, -50f));
+            lineText.fontSize = 20; lineText.alignment = TextAnchor.UpperLeft;
+            var lineRT = lineText.GetComponent<RectTransform>();
+            lineRT.anchorMin = new Vector2(0f, 1f); lineRT.anchorMax = new Vector2(1f, 1f);
+            lineRT.pivot = new Vector2(0.5f, 1f);
+            lineRT.sizeDelta = new Vector2(-40f, 90f);
+            lineRT.anchoredPosition = new Vector2(0f, -50f);
+
+            var hintText = CreateLabel(panelRoot.transform, "ContinueHint", "[E] Continue", Vector2.zero);
+            hintText.fontSize = 18; hintText.color = new Color(0.6f, 0.6f, 0.6f);
+            hintText.alignment = TextAnchor.LowerRight;
+            var hintRT = hintText.GetComponent<RectTransform>();
+            hintRT.anchorMin = new Vector2(0f, 0f); hintRT.anchorMax = new Vector2(1f, 0f);
+            hintRT.pivot = new Vector2(0.5f, 0f);
+            hintRT.sizeDelta = new Vector2(-40f, 30f);
+            hintRT.anchoredPosition = new Vector2(0f, 10f);
+
+            panelRoot.SetActive(false);
+
+            // ── Wire LotDialogueUI component ──────────────────────────
+            var uiType = System.Type.GetType("SOTL.NPC.LotDialogueUI, Assembly-CSharp");
+            if (uiType != null)
+            {
+                var ui = canvasGO.AddComponent(uiType);
+                SetField(ui, "_promptRoot",   promptRoot);
+                SetField(ui, "_promptText",   promptText);
+                SetField(ui, "_panelRoot",    panelRoot);
+                SetField(ui, "_nameText",     nameText);
+                SetField(ui, "_lineText",     lineText);
+                SetField(ui, "_continueHint", hintText);
+                Debug.Log("[SOTL Scene] DialogueUI wired.");
+            }
+            else
+            {
+                Debug.LogWarning("[SOTL Scene] LotDialogueUI type not found — recompile and rebuild.");
+            }
+
+            Undo.RegisterCreatedObjectUndo(canvasGO, "Create Dialogue UI");
+            Debug.Log("[SOTL Scene] Dialogue canvas created.");
         }
 
         // ── Reflection helper ─────────────────────────────────────────
