@@ -1,0 +1,10 @@
+﻿<Solution>
+  <Project Path="OpenClaw.ClaudeBridge.Editor.csproj" />
+  <Project Path="SOTL.Editor.csproj" />
+  <Project Path="Assembly-CSharp.csproj" />
+  <Project Path="SOTL.UI.csproj" />
+  <Project Path="SOTL.API.csproj" />
+  <Project Path="SOTL.Core.csproj" />
+  <Project Path="SOTL.Player.csproj" />
+  <Project Path="Assembly-CSharp-Editor.csproj" />
+</Solution>

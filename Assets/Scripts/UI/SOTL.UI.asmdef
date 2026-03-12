@@ -1,0 +1,14 @@
+{
+    "name": "SOTL.UI",
+    "rootNamespace": "SOTL.UI",
+    "references": ["SOTL.Core", "SOTL.API", "Unity.InputSystem"],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
