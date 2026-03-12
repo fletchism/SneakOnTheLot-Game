@@ -142,14 +142,25 @@ namespace SOTL.Editor
             Debug.Log($"[SOTL] Assigned AC_NPC_Idle_Masculine.controller to {npc.name}.");
         }
 
+        [MenuItem("SOTL/4 - Add Dialogue UI", false, 40)]
+        public static void AddDialogueUI()
+        {
+            CreateDialogueUI();
+            EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
+            Debug.Log("[SOTL Scene] Dialogue UI added. Save scene (Cmd+S).");
+        }
+
         [MenuItem("SOTL/Scene/Clean Rebuild (delete + rebuild)", false, 110)]
         public static void CleanRebuild()
         {
             if (!EditorUtility.DisplayDialog("Clean Rebuild",
-                "Deletes: Ground, Player, Lighting, StatsCanvas, Managers.\nThen rebuilds.\n\nProceed?",
+                "WARNING: Only deletes SOTL builder-owned objects.\n" +
+                "Deletes: Ground, SceneLighting, StatsCanvas, LinkOverlayCanvas, DialogueCanvas, [Managers].\n\n" +
+                "Player and NPCs are NOT touched.\n\nProceed?",
                 "Clean Rebuild", "Cancel")) return;
 
-            foreach (var name in new[] { "Ground", "Player", "SceneLighting", "StatsCanvas", "LinkOverlayCanvas", "[Managers]" })
+            // Only destroy objects that Build() created — never touch Player or NPCs
+            foreach (var name in new[] { "Ground", "SceneLighting", "StatsCanvas", "LinkOverlayCanvas", "DialogueCanvas", "[Managers]" })
             {
                 var go = GameObject.Find(name);
                 if (go != null) Object.DestroyImmediate(go);
