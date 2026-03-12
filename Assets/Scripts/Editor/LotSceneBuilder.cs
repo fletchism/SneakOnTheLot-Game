@@ -1,6 +1,7 @@
 #if UNITY_EDITOR
 using System.Linq;
 using UnityEditor;
+using UnityEditor.Animations;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -44,6 +45,107 @@ namespace SOTL.Editor
 
             EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
             Debug.Log("[SOTL Scene] Done. Press PLAY. WASD to move, Tab to open stats panel.");
+        }
+
+        // ── NPC Idle Controller ───────────────────────────────────────
+
+        [MenuItem("SOTL/3 - Create NPC Idle Controller", false, 30)]
+        public static void CreateNPCIdleController()
+        {
+            // Search for the idle FBX by name anywhere in the project
+            var guids = AssetDatabase.FindAssets("A_MOD_BL_Idle_Standing_Masc");
+            string fbxPath = null;
+            foreach (var guid in guids)
+            {
+                var path = AssetDatabase.GUIDToAssetPath(guid);
+                if (path.EndsWith(".fbx", System.StringComparison.OrdinalIgnoreCase))
+                {
+                    fbxPath = path;
+                    break;
+                }
+            }
+
+            if (fbxPath == null)
+            {
+                Debug.LogError("[SOTL] Could not find A_MOD_BL_Idle_Standing_Masc.fbx. Make sure Synty assets are imported.");
+                EditorUtility.DisplayDialog("FBX Not Found",
+                    "A_MOD_BL_Idle_Standing_Masc.fbx was not found in the project.\nMake sure Synty Sidekick assets are imported.", "OK");
+                return;
+            }
+
+            Debug.Log($"[SOTL] Found idle FBX at: {fbxPath}");
+
+            // Extract animation clip — skip __preview__ clips Unity auto-generates
+            var idleClip = AssetDatabase.LoadAllAssetsAtPath(fbxPath)
+                .OfType<AnimationClip>()
+                .FirstOrDefault(c => !c.name.StartsWith("__preview__"));
+
+            if (idleClip == null)
+            {
+                Debug.LogError($"[SOTL] No AnimationClip found inside {fbxPath}.");
+                return;
+            }
+
+            Debug.Log($"[SOTL] Using clip: {idleClip.name}");
+
+            // Create output folder
+            if (!AssetDatabase.IsValidFolder("Assets/Animations"))
+                AssetDatabase.CreateFolder("Assets", "Animations");
+            if (!AssetDatabase.IsValidFolder("Assets/Animations/NPC"))
+                AssetDatabase.CreateFolder("Assets/Animations", "NPC");
+
+            const string controllerPath = "Assets/Animations/NPC/AC_NPC_Idle_Masculine.controller";
+
+            // Overwrite if it already exists
+            var existing = AssetDatabase.LoadAssetAtPath<AnimatorController>(controllerPath);
+            if (existing != null)
+                AssetDatabase.DeleteAsset(controllerPath);
+
+            var controller = AnimatorController.CreateAnimatorControllerAtPath(controllerPath);
+            controller.AddMotion(idleClip);
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+
+            Debug.Log($"[SOTL] Controller created: {controllerPath}");
+
+            // Assign to NPC_Filmmaker (and any other LotNPC objects) in the scene
+            int assigned = 0;
+            var npc = GameObject.Find("NPC_Filmmaker");
+            if (npc != null)
+            {
+                AssignController(npc, controller);
+                assigned++;
+            }
+
+            // Also catch any other NPCs already in the scene
+            foreach (var lotNpc in Object.FindObjectsByType<MonoBehaviour>(FindObjectsSortMode.None))
+            {
+                if (lotNpc.GetType().Name == "LotNPC" && lotNpc.gameObject.name != "NPC_Filmmaker")
+                {
+                    AssignController(lotNpc.gameObject, controller);
+                    assigned++;
+                }
+            }
+
+            if (assigned == 0)
+                Debug.LogWarning("[SOTL] No NPC found in scene. Controller saved — assign manually in Inspector.");
+            else
+                Debug.Log($"[SOTL] Controller assigned to {assigned} NPC(s). Save scene and hit Play.");
+
+            EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
+        }
+
+        static void AssignController(GameObject npc, AnimatorController controller)
+        {
+            var animator = npc.GetComponentInChildren<Animator>();
+            if (animator == null)
+            {
+                animator = npc.AddComponent<Animator>();
+                Debug.Log($"[SOTL] Added Animator to {npc.name}.");
+            }
+            animator.runtimeAnimatorController = controller;
+            EditorUtility.SetDirty(animator);
+            Debug.Log($"[SOTL] Assigned AC_NPC_Idle_Masculine.controller to {npc.name}.");
         }
 
         [MenuItem("SOTL/Scene/Clean Rebuild (delete + rebuild)", false, 110)]
@@ -382,11 +484,8 @@ namespace SOTL.Editor
                 new Vector2(0, -80));
             var statusLabel = CreateLabel(panelGO.transform, "StatusLabel", "", new Vector2(0, 120));
 
-            // Stats display logic is merged into StatsPanelToggler
-
             // StatsPanelToggler — self-wiring via StatsPanelToggler.Start()
             var togglerGO = canvasGO.AddComponent(System.Type.GetType("SOTL.UI.StatsPanelToggler, SOTL.UI"));
-            // Panel reference set via StatsPanelToggler.FindPanel() by name "StatsPanel"
 
             Undo.RegisterCreatedObjectUndo(canvasGO, "Create Stats Canvas");
             Debug.Log("[SOTL Scene] Stats UI created. Tab to toggle.");
