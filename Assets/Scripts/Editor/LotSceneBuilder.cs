@@ -216,8 +216,11 @@ namespace SOTL.Editor
             tpsPivot.transform.SetParent(player.transform);
             tpsPivot.transform.localPosition = new Vector3(0f, 1.4f, 0f);
 
-            // PlayerController
-            player.AddComponent<LotPlayerController>();
+            // PlayerController (reflection — LotPlayerController may be in Assembly-CSharp)
+            var playerCtrlType = System.Type.GetType("LotPlayerController") ??
+                                 System.Type.GetType("SOTL.Player.LotPlayerController");
+            if (playerCtrlType != null)
+                player.AddComponent(playerCtrlType);
 
             // FPS VCam
             var fpsGO = new GameObject("VCam_FPS");
@@ -239,11 +242,14 @@ namespace SOTL.Editor
             tpsFollow.CameraDistance = 3.5f;
             tpsGO.AddComponent<CinemachineRotateWithFollowTarget>();
 
-            // Wire cam refs into controller
-            var ctrl = player.GetComponent<LotPlayerController>();
-            SetField(ctrl, "_fpsCam", fpsCam);
-            SetField(ctrl, "_tpsCam", tpsCam);
-            SetField(ctrl, "_tpsPivot", tpsPivot.transform);
+            // Wire cam refs into controller via reflection
+            var ctrl = player.GetComponent(playerCtrlType);
+            if (ctrl != null)
+            {
+                SetField(ctrl, "_fpsCam", fpsCam);
+                SetField(ctrl, "_tpsCam", tpsCam);
+                SetField(ctrl, "_tpsPivot", tpsPivot.transform);
+            }
 
             SetupCinemachineBrain();
 
