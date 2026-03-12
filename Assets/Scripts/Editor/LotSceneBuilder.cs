@@ -108,21 +108,15 @@ namespace SOTL.Editor
 
             Debug.Log($"[SOTL] Controller created: {controllerPath}");
 
-            // Assign to NPC_Filmmaker (and any other LotNPC objects) in the scene
+            // Search ALL GameObjects including inactive ones
             int assigned = 0;
-            var npc = GameObject.Find("NPC_Filmmaker");
-            if (npc != null)
+            foreach (var go in Resources.FindObjectsOfTypeAll<GameObject>())
             {
-                AssignController(npc, controller);
-                assigned++;
-            }
-
-            // Also catch any other NPCs already in the scene
-            foreach (var lotNpc in Object.FindObjectsByType<MonoBehaviour>(FindObjectsSortMode.None))
-            {
-                if (lotNpc.GetType().Name == "LotNPC" && lotNpc.gameObject.name != "NPC_Filmmaker")
+                // skip assets, only scene objects
+                if (UnityEditor.EditorUtility.IsPersistent(go)) continue;
+                if (go.name == "NPC_Filmmaker" || go.GetComponent("LotNPC") != null)
                 {
-                    AssignController(lotNpc.gameObject, controller);
+                    AssignController(go, controller);
                     assigned++;
                 }
             }
