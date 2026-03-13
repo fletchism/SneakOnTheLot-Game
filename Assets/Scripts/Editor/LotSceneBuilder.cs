@@ -702,8 +702,17 @@ namespace SOTL.Editor
                 return;
             }
 
-            var hudGO = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
-            hudGO.name = HUD_GO_NAME;
+            // ── Canvas wrapper (prefab has no Canvas of its own) ──────────────
+            var canvasGO = new GameObject(HUD_GO_NAME);
+            var canvas = canvasGO.AddComponent<Canvas>();
+            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            canvas.sortingOrder = 1;
+            canvasGO.AddComponent<UnityEngine.UI.CanvasScaler>();
+            canvasGO.AddComponent<UnityEngine.UI.GraphicRaycaster>();
+
+            // ── Instantiate Synty HUD as child of canvas ──────────────────────
+            var hudGO = (GameObject)PrefabUtility.InstantiatePrefab(prefab, canvasGO.transform);
+            hudGO.GetComponent<RectTransform>().anchoredPosition = Vector2.zero;
 
             // ── Find layout regions ───────────────────────────────────────────
             var topLeft  = FindDeepChild(hudGO.transform, "Top Left");
@@ -720,17 +729,17 @@ namespace SOTL.Editor
             if (hudCtrlType == null)
             {
                 Debug.LogWarning("[SOTL Scene] LotHUDController type not found — recompile first.");
-                Undo.RegisterCreatedObjectUndo(hudGO, "Create HUD");
+                Undo.RegisterCreatedObjectUndo(canvasGO, "Create HUD");
                 return;
             }
 
-            var ctrl = hudGO.AddComponent(hudCtrlType);
+            var ctrl = canvasGO.AddComponent(hudCtrlType);
             SetField(ctrl, "_xpText",       xpText);
             SetField(ctrl, "_levelText",    levelText);
             SetField(ctrl, "_fameText",     fameText);
             SetField(ctrl, "_prestigeText", prestigeText);
 
-            Undo.RegisterCreatedObjectUndo(hudGO, "Create HUD");
+            Undo.RegisterCreatedObjectUndo(canvasGO, "Create HUD");
             Debug.Log("[SOTL Scene] HUD created and wired.");
         }
 
