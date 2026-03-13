@@ -22,6 +22,8 @@ namespace SOTL.Editor
         const string IDLE_CTRL    = "Assets/Animations/NPC/AC_NPC_Idle_Masculine.controller";
 
         // Reflection type strings (Assembly-CSharp — no direct asmdef reference from Editor)
+        const string HUD_PREFAB        = "Assets/Synty/InterfaceMilitaryCombatHUD/Prefabs/_PreMadeHUDs/Screen_MilitaryCombat_HUD_3rdPerson_01.prefab";
+        const string T_HUD_CTRL        = "SOTL.UI.LotHUDController, SOTL.UI";
         const string T_INPUT_READER    = "Synty.AnimationBaseLocomotion.Samples.InputSystem.InputReader, Assembly-CSharp";
         const string T_PLAYER_CTRL     = "SOTL.Player.LotPlayerController, Assembly-CSharp";
         const string T_CAMERA_CTRL     = "SOTL.Player.LotCameraController, Assembly-CSharp";
@@ -79,6 +81,7 @@ namespace SOTL.Editor
             CreateDialogueUI();
             CreateManagers(config);
             CreatePrestigePickup();
+            CreateHUD();
 
             EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
             Debug.Log("[SOTL Scene] Done. Save scene (Cmd+S) then hit Play.");
@@ -681,6 +684,87 @@ namespace SOTL.Editor
 
             Undo.RegisterCreatedObjectUndo(go, "Create Prestige Pickup");
             Debug.Log("[SOTL Scene] PrestigePickup_01 placed at (-4, 0.6, 4) — clear of NPC at (3,0,3).");
+        }
+
+        static void CreateHUD()
+        {
+            const string HUD_GO_NAME = "HUD_MilitaryCombat_3rdPerson";
+            if (GameObject.Find(HUD_GO_NAME))
+            {
+                Debug.Log("[SOTL Scene] HUD already in scene — skipping.");
+                return;
+            }
+
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(HUD_PREFAB);
+            if (prefab == null)
+            {
+                Debug.LogWarning($"[SOTL Scene] HUD prefab not found: {HUD_PREFAB}");
+                return;
+            }
+
+            var hudGO = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
+            hudGO.name = HUD_GO_NAME;
+
+            // ── Find layout regions ───────────────────────────────────────────
+            var topLeft  = FindDeepChild(hudGO.transform, "Top Left");
+            var topRight = FindDeepChild(hudGO.transform, "Top Right");
+
+            // ── Create TMP stat labels ────────────────────────────────────────
+            var xpText       = CreateTMPLabel(topLeft,  "XP_Text",       "XP  —",       new Vector2(10f, -10f));
+            var levelText    = CreateTMPLabel(topLeft,  "Level_Text",    "LVL  —",      new Vector2(10f, -50f));
+            var fameText     = CreateTMPLabel(topRight, "Fame_Text",     "FAME  —",     new Vector2(-10f, -10f));
+            var prestigeText = CreateTMPLabel(topRight, "Prestige_Text", "PRESTIGE  —", new Vector2(-10f, -50f));
+
+            // ── Add and wire LotHUDController ─────────────────────────────────
+            var hudCtrlType = System.Type.GetType(T_HUD_CTRL);
+            if (hudCtrlType == null)
+            {
+                Debug.LogWarning("[SOTL Scene] LotHUDController type not found — recompile first.");
+                Undo.RegisterCreatedObjectUndo(hudGO, "Create HUD");
+                return;
+            }
+
+            var ctrl = hudGO.AddComponent(hudCtrlType);
+            SetField(ctrl, "_xpText",       xpText);
+            SetField(ctrl, "_levelText",    levelText);
+            SetField(ctrl, "_fameText",     fameText);
+            SetField(ctrl, "_prestigeText", prestigeText);
+
+            Undo.RegisterCreatedObjectUndo(hudGO, "Create HUD");
+            Debug.Log("[SOTL Scene] HUD created and wired.");
+        }
+
+        static Transform FindDeepChild(Transform parent, string name)
+        {
+            foreach (Transform child in parent)
+            {
+                if (child.name == name) return child;
+                var found = FindDeepChild(child, name);
+                if (found != null) return found;
+            }
+            return null;
+        }
+
+        static TMPro.TMP_Text CreateTMPLabel(Transform parent, string name, string defaultText, Vector2 anchoredPos)
+        {
+            if (parent == null)
+            {
+                Debug.LogWarning($"[SOTL Scene] CreateTMPLabel: parent is null for {name}");
+                return null;
+            }
+            var go = new GameObject(name, typeof(RectTransform));
+            go.transform.SetParent(parent, false);
+            var rt = go.GetComponent<RectTransform>();
+            rt.sizeDelta       = new Vector2(300f, 40f);
+            rt.anchorMin       = new Vector2(0f, 1f);
+            rt.anchorMax       = new Vector2(0f, 1f);
+            rt.pivot           = new Vector2(0f, 1f);
+            rt.anchoredPosition = anchoredPos;
+            var tmp = go.AddComponent<TMPro.TextMeshProUGUI>();
+            tmp.text      = defaultText;
+            tmp.fontSize  = 22f;
+            tmp.color     = Color.white;
+            return tmp;
         }
 
         static GameObject CreateChildPanel(Transform parent, string name)
