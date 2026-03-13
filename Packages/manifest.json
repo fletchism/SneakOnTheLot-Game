@@ -1,15 +1,5 @@
 {
-  "scopedRegistries": [
-    {
-      "name": "Photon",
-      "url": "https://package.photonengine.com",
-      "scopes": [
-        "com.exitgames"
-      ]
-    }
-  ],
   "dependencies": {
-    "com.exitgames.photon-realtime": "5.0.6",
     "com.openclaw.claudebridge": "file:/Users/fletcherdarrin/UnityPackages/com.openclaw.claudebridge",
     "com.unity.ai.navigation": "2.0.10",
     "com.unity.cinemachine": "3.1.6",
