@@ -13,10 +13,18 @@ namespace SOTL.Editor
 {
     public static class LotSceneBuilder
     {
-        const string PLAYER_PREFAB = "Assets/Synty/AnimationBaseLocomotion/Samples/Prefabs/PF_SidekickPlayer.prefab";
-        const string CAMERA_PREFAB = "Assets/Synty/AnimationBaseLocomotion/Samples/Prefabs/PF_SyntyCamera.prefab";
-        const string NPC_PREFAB    = "Assets/Synty/SidekickCharacters/Characters/ModernCivilians/ModernCivilian_01/ModernCivilian_01.prefab";
-        const string IDLE_CTRL     = "Assets/Animations/NPC/AC_NPC_Idle_Masculine.controller";
+        // Character mesh — confirmed present in project
+        const string CHAR_PREFAB  = "Assets/Synty/SidekickCharacters/Characters/HumanSpecies/HumanSpecies_01/HumanSpecies_01.prefab";
+        // Locomotion controller — confirmed present in project
+        const string PLAYER_ANIM  = "Assets/Synty/AnimationBaseLocomotion/Animations/Sidekick/AC_Sidekick_Masculine.controller";
+        // NPC
+        const string NPC_PREFAB   = "Assets/Synty/SidekickCharacters/Characters/ModernCivilians/ModernCivilian_01/ModernCivilian_01.prefab";
+        const string IDLE_CTRL    = "Assets/Animations/NPC/AC_NPC_Idle_Masculine.controller";
+
+        // Reflection type strings (Assembly-CSharp — no direct asmdef reference from Editor)
+        const string T_INPUT_READER   = "Synty.AnimationBaseLocomotion.Samples.InputSystem.InputReader, Assembly-CSharp";
+        const string T_PLAYER_CTRL    = "SOTL.Player.LotPlayerController, Assembly-CSharp";
+        const string T_CAMERA_CTRL    = "SOTL.Player.LotCameraController, Assembly-CSharp";
 
         [MenuItem("SOTL/2 - Build Lot Scene", false, 20)]
         public static void Build()
@@ -37,6 +45,7 @@ namespace SOTL.Editor
 
             CreateGround();
             CreatePlayer();
+            CreateCameraRig();
             CreateNPC();
             CreateLighting();
             EnsureEventSystem();
@@ -134,28 +143,150 @@ namespace SOTL.Editor
 
         static void CreatePlayer()
         {
-            if (GameObject.Find("PF_SidekickPlayer") || GameObject.Find("SyntyCamera")) return;
-
-            var camPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(CAMERA_PREFAB);
-            if (camPrefab != null)
+            // Remove stale Synty sample objects from previous builds
+            foreach (var n in new[] { "SyntyCamera", "PF_SyntyCamera", "PF_SidekickPlayer" })
             {
-                var cam = (GameObject)PrefabUtility.InstantiatePrefab(camPrefab);
-                cam.name = "SyntyCamera";
-                Undo.RegisterCreatedObjectUndo(cam, "Create Camera");
-                Debug.Log("[SOTL Scene] SyntyCamera instantiated.");
+                var stale = GameObject.Find(n);
+                if (stale != null)
+                {
+                    Object.DestroyImmediate(stale);
+                    Debug.Log($"[SOTL Scene] Removed stale object: {n}");
+                }
             }
-            else Debug.LogWarning($"[SOTL Scene] Camera prefab not found: {CAMERA_PREFAB}");
 
-            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(PLAYER_PREFAB);
-            if (prefab != null)
+            if (GameObject.Find("Player") != null) return;
+
+            // ── Root ──────────────────────────────────────────────────
+            var player = new GameObject("Player");
+            player.tag   = "Player";
+            player.layer = 3; // Character layer (matches original PF_SidekickPlayer)
+
+            // ── CharacterController ───────────────────────────────────
+            var cc = player.AddComponent<CharacterController>();
+            cc.height = 1.8f;
+            cc.center = new Vector3(0f, 0.9f, 0f);
+            cc.radius = 0.3f;
+
+            // ── InputReader (Assembly-CSharp via reflection) ──────────
+            var inputReaderType = System.Type.GetType(T_INPUT_READER);
+            if (inputReaderType != null)
+                player.AddComponent(inputReaderType);
+            else
+                Debug.LogWarning("[SOTL Scene] InputReader type not found — recompile first.");
+
+            // ── Helper transforms (camera + ray casts) ────────────────
+            var rearRay = new GameObject("RearRayPos").transform;
+            rearRay.SetParent(player.transform);
+            rearRay.localPosition = new Vector3(0f, 0.8f, -0.15f);
+
+            var frontRay = new GameObject("FrontRayPos").transform;
+            frontRay.SetParent(player.transform);
+            frontRay.localPosition = new Vector3(0f, 0.8f, 0.15f);
+
+            // Camera follows this point
+            var lookAt = new GameObject("SyntyPlayer_LookAt").transform;
+            lookAt.SetParent(player.transform);
+            lookAt.localPosition = new Vector3(0f, 1.6f, 0f);
+
+            // Lock-on target
+            var lockOn = new GameObject("TargetLockOnPos").transform;
+            lockOn.SetParent(player.transform);
+            lockOn.localPosition = new Vector3(0f, 1.0f, 0f);
+
+            // ── Character mesh ────────────────────────────────────────
+            Animator meshAnimator = null;
+            var charPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(CHAR_PREFAB);
+            if (charPrefab != null)
             {
-                var player = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
-                player.transform.position = Vector3.zero;
-                player.tag = "Player";
-                Undo.RegisterCreatedObjectUndo(player, "Create Player");
-                Debug.Log("[SOTL Scene] PF_SidekickPlayer instantiated.");
+                var meshGO = (GameObject)PrefabUtility.InstantiatePrefab(charPrefab, player.transform);
+                meshGO.transform.localPosition = Vector3.zero;
+                meshGO.transform.localRotation = Quaternion.identity;
+                meshAnimator = meshGO.GetComponentInChildren<Animator>();
+
+                var animCtrl = AssetDatabase.LoadAssetAtPath<RuntimeAnimatorController>(PLAYER_ANIM);
+                if (animCtrl != null && meshAnimator != null)
+                {
+                    meshAnimator.runtimeAnimatorController = animCtrl;
+                    Debug.Log("[SOTL Scene] HumanSpecies_01 mesh attached, AC_Sidekick_Masculine assigned.");
+                }
+                else
+                    Debug.LogWarning("[SOTL Scene] Could not assign player animator controller.");
             }
-            else Debug.LogWarning($"[SOTL Scene] Player prefab not found: {PLAYER_PREFAB}");
+            else
+                Debug.LogWarning($"[SOTL Scene] Character prefab not found: {CHAR_PREFAB}");
+
+            // ── LotPlayerController (Assembly-CSharp via reflection) ──
+            var playerCtrlType = System.Type.GetType(T_PLAYER_CTRL);
+            if (playerCtrlType != null)
+            {
+                var ctrl = player.AddComponent(playerCtrlType);
+                if (meshAnimator != null) SetField(ctrl, "_animator",    meshAnimator);
+                SetField(ctrl, "_rearRayPos",  rearRay);
+                SetField(ctrl, "_frontRayPos", frontRay);
+                // _cameraController wired in CreateCameraRig() after rig exists
+            }
+            else
+                Debug.LogWarning("[SOTL Scene] LotPlayerController type not found — recompile first.");
+
+            Undo.RegisterCreatedObjectUndo(player, "Create Player");
+            Debug.Log("[SOTL Scene] Player created.");
+        }
+
+        static void CreateCameraRig()
+        {
+            if (GameObject.Find("CameraRig") != null) return;
+
+            // Remove default Main Camera if not already under a rig
+            var defaultCam = GameObject.Find("Main Camera");
+            if (defaultCam != null && defaultCam.transform.parent == null)
+            {
+                Object.DestroyImmediate(defaultCam);
+                Debug.Log("[SOTL Scene] Removed default Main Camera.");
+            }
+
+            var rig = new GameObject("CameraRig");
+
+            // ── Main Camera as child ──────────────────────────────────
+            var camGO = new GameObject("Main Camera");
+            camGO.transform.SetParent(rig.transform);
+            camGO.transform.localPosition = new Vector3(0f, 0.5f, -3.5f);
+            camGO.tag = "MainCamera";
+            var cam = camGO.AddComponent<Camera>();
+            cam.nearClipPlane = 0.1f;
+            cam.farClipPlane  = 500f;
+            camGO.AddComponent<AudioListener>();
+
+            // URP camera data
+            camGO.AddComponent<UniversalAdditionalCameraData>();
+
+            // ── LotCameraController ───────────────────────────────────
+            var player = GameObject.FindWithTag("Player");
+            var camCtrlType = System.Type.GetType(T_CAMERA_CTRL);
+            Component camCtrl = null;
+            if (camCtrlType != null)
+            {
+                camCtrl = rig.AddComponent(camCtrlType);
+                if (player != null) SetField(camCtrl, "_character",   player);
+                SetField(camCtrl, "_mainCamera", cam);
+                Debug.Log("[SOTL Scene] LotCameraController added to CameraRig.");
+            }
+            else
+                Debug.LogWarning("[SOTL Scene] LotCameraController type not found — recompile first.");
+
+            // ── Wire camera controller back into LotPlayerController ──
+            if (player != null && camCtrl != null)
+            {
+                var playerCtrlType = System.Type.GetType(T_PLAYER_CTRL);
+                if (playerCtrlType != null)
+                {
+                    var playerCtrl = player.GetComponent(playerCtrlType);
+                    if (playerCtrl != null)
+                        SetField(playerCtrl, "_cameraController", camCtrl);
+                }
+            }
+
+            Undo.RegisterCreatedObjectUndo(rig, "Create CameraRig");
+            Debug.Log("[SOTL Scene] CameraRig created.");
         }
 
         static void CreateNPC()
