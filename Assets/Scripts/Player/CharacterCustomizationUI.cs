@@ -322,6 +322,22 @@ namespace SOTL.Player
                 var ctrl = player.GetComponent<LotPlayerController>();
                 if (ctrl != null) ctrl.enabled = !freeze;
             }
+
+            // Unlock cursor for UI interaction, re-lock when done
+            if (freeze)
+            {
+                Cursor.visible = true;
+                Cursor.lockState = CursorLockMode.None;
+            }
+            else
+            {
+                Cursor.visible = false;
+                Cursor.lockState = CursorLockMode.Locked;
+            }
+
+            // Disable camera controller so mouse look doesn't fight the UI
+            var cam = Object.FindFirstObjectByType<LotCameraController>();
+            if (cam != null) cam.enabled = !freeze;
         }
 
         // ── UI Helpers ────────────────────────────────────────────────────
