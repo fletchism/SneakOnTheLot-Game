@@ -218,6 +218,12 @@ namespace SOTL.Player
             var newAnimator = newChar.GetComponentInChildren<Animator>();
             if (newAnimator != null)
             {
+                // Force grounded state so the animator doesn't enter falling
+                newAnimator.SetBool("IsGrounded", true);
+                newAnimator.SetBool("IsStopped", true);
+                newAnimator.SetFloat("MoveSpeed", 0f);
+                newAnimator.SetFloat("FallingDuration", 0f);
+
                 var playerController = GetComponent<LotPlayerController>();
                 if (playerController != null)
                 {
