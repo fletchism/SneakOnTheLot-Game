@@ -1,7 +1,7 @@
 {
     "name": "SOTL.UI",
     "rootNamespace": "SOTL.UI",
-    "references": ["SOTL.Core", "SOTL.API", "Unity.InputSystem"],
+    "references": ["SOTL.Core", "SOTL.API", "Unity.InputSystem", "Unity.TextMeshPro"],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
