@@ -177,6 +177,20 @@ namespace SOTL.Multiplayer
         public System.Collections.Generic.Dictionary<int, Player> GetRoomPlayers()
             => _client?.CurrentRoom?.Players;
 
+        /// <summary>Send a Photon event to all other players in the room.</summary>
+        public bool RaiseEvent(byte eventCode, object data, bool reliable = false)
+        {
+            if (_client == null || !_client.InRoom) return false;
+            var args = new RaiseEventArgs { Receivers = ReceiverGroup.Others };
+            var opts = reliable
+                ? new Photon.Client.SendOptions { Reliability = true }
+                : new Photon.Client.SendOptions { Reliability = false };
+            return _client.OpRaiseEvent(eventCode, data, args, opts);
+        }
+
+        /// <summary>Local player's ActorNumber in the current room, or -1.</summary>
+        public int LocalActorNumber => _client?.LocalPlayer?.ActorNumber ?? -1;
+
         /// <summary>Set a custom property on the local player and broadcast to room.</summary>
         public bool SetLocalPlayerProperty(string key, string value)
         {

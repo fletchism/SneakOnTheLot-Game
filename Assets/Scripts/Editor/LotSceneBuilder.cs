@@ -33,6 +33,7 @@ namespace SOTL.Editor
         const string T_SIDEKICK_MGR    = "SOTL.Multiplayer.SidekickCharacterManager, SOTL.Multiplayer";
         const string T_REMOTE_MGR      = "SOTL.Multiplayer.RemotePlayerManager, SOTL.Multiplayer";
         const string T_CUSTOMIZE_UI   = "SOTL.Player.CharacterCustomizationUI, Assembly-CSharp";
+        const string T_LOCAL_POS_SYNC = "SOTL.Player.LocalPositionSync, Assembly-CSharp";
 
         [MenuItem("SOTL/Scene/Clean Rebuild (delete + rebuild)", false, 10)]
         public static void CleanRebuild()
@@ -273,6 +274,13 @@ namespace SOTL.Editor
                 player.AddComponent(localSyncType);
             else
                 Debug.LogWarning("[SOTL Scene] LocalCharacterSync type not found — compile first.");
+
+            // ── LocalPositionSync (sends position to Photon at 10Hz) ──
+            var posSyncType = System.Type.GetType(T_LOCAL_POS_SYNC);
+            if (posSyncType != null)
+                player.AddComponent(posSyncType);
+            else
+                Debug.LogWarning("[SOTL Scene] LocalPositionSync type not found — compile first.");
 
             Undo.RegisterCreatedObjectUndo(player, "Create Player");
             Debug.Log("[SOTL Scene] Player created.");

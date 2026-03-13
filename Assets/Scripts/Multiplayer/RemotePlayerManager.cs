@@ -6,28 +6,47 @@ using UnityEngine;
 namespace SOTL.Multiplayer
 {
     /// <summary>
-    /// Manages remote player GameObjects based on Photon player property updates.
-    /// Spawns/rebuilds remote characters when their "avatar" property changes.
-    /// Destroys remote GameObjects when players leave.
-    ///
-    /// Phase 2: appearance sync only. Position sync comes in Phase 3.
-    /// Attach to a GameObject under [Managers].
+    /// Manages remote player GameObjects.
+    /// Phase 2: spawns/rebuilds from avatar properties.
+    /// Phase 3: receives position events, interpolates movement, drives animator.
     /// </summary>
-    public class RemotePlayerManager : MonoBehaviour, IInRoomCallbacks
+    public class RemotePlayerManager : MonoBehaviour, IInRoomCallbacks, IOnEventCallback
     {
         public static RemotePlayerManager Instance { get; private set; }
 
         [Header("Spawn Settings")]
-        [Tooltip("Base position for spawning remote players. Each gets an offset.")]
         [SerializeField] private Vector3 _spawnOrigin = new Vector3(0f, 0f, 5f);
-
-        [Tooltip("Spacing between remote player spawns.")]
         [SerializeField] private float _spawnSpacing = 2f;
+
+        [Header("Interpolation")]
+        [SerializeField] private float _positionLerpSpeed = 12f;
+        [SerializeField] private float _rotationLerpSpeed = 12f;
+
+        /// <summary>Position sync event code. Must match LocalPositionSync.EventCode.</summary>
+        const byte PositionEventCode = 1;
+
+        // Animator hashes (must match LotPlayerController)
+        static readonly int MoveSpeedHash  = Animator.StringToHash("MoveSpeed");
+        static readonly int CurrentGaitHash = Animator.StringToHash("CurrentGait");
+        static readonly int IsGroundedHash  = Animator.StringToHash("IsGrounded");
+        static readonly int IsStoppedHash   = Animator.StringToHash("IsStopped");
+        static readonly int IsStrafingHash  = Animator.StringToHash("IsStrafing");
 
         /// <summary>ActorNumber → remote player GameObject.</summary>
         private readonly Dictionary<int, GameObject> _remotePlayers = new Dictionary<int, GameObject>();
 
+        /// <summary>ActorNumber → target position/rotation for interpolation.</summary>
+        private readonly Dictionary<int, RemoteState> _remoteStates = new Dictionary<int, RemoteState>();
+
         private bool _registered;
+
+        struct RemoteState
+        {
+            public Vector3 targetPos;
+            public float targetRotY;
+            public float moveSpeed;
+            public int gait;
+        }
 
         // ── Lifecycle ─────────────────────────────────────────────────────
 
@@ -37,15 +56,12 @@ namespace SOTL.Multiplayer
             Instance = this;
         }
 
-        void Start()
-        {
-            TryRegister();
-        }
+        void Start() => TryRegister();
 
         void Update()
         {
-            // Retry registration if LotNetworkManager wasn't ready at Start
             if (!_registered) TryRegister();
+            InterpolateAll();
         }
 
         void OnDestroy()
@@ -56,12 +72,10 @@ namespace SOTL.Multiplayer
                 if (net != null) net.UnregisterCallbacks(this);
             }
 
-            // Clean up remote player objects
             foreach (var kvp in _remotePlayers)
-            {
                 if (kvp.Value != null) Destroy(kvp.Value);
-            }
             _remotePlayers.Clear();
+            _remoteStates.Clear();
         }
 
         void TryRegister()
@@ -71,9 +85,7 @@ namespace SOTL.Multiplayer
 
             net.RegisterCallbacks(this);
             _registered = true;
-            Debug.Log("[SOTL Remote] Registered for Photon in-room callbacks.");
-
-            // Process any players already in the room
+            Debug.Log("[SOTL Remote] Registered for Photon callbacks (in-room + events).");
             ProcessExistingPlayers();
         }
 
@@ -93,19 +105,14 @@ namespace SOTL.Multiplayer
                 if (player.IsLocal) continue;
 
                 if (player.CustomProperties.TryGetValue(CharacterAppearanceData.PhotonKey, out var avatarJson))
-                {
                     SpawnOrRebuild(player.ActorNumber, avatarJson as string);
-                }
             }
         }
 
         // ── IInRoomCallbacks ──────────────────────────────────────────────
 
         public void OnPlayerEnteredRoom(Player newPlayer)
-        {
-            Debug.Log($"[SOTL Remote] Player entered: {newPlayer.ActorNumber} ({newPlayer.NickName})");
-            // Their avatar property will arrive via OnPlayerPropertiesUpdate
-        }
+            => Debug.Log($"[SOTL Remote] Player entered: {newPlayer.ActorNumber}");
 
         public void OnPlayerLeftRoom(Player otherPlayer)
         {
@@ -116,7 +123,6 @@ namespace SOTL.Multiplayer
         public void OnPlayerPropertiesUpdate(Player targetPlayer, PhotonHashtable changedProps)
         {
             if (targetPlayer.IsLocal) return;
-
             if (changedProps.TryGetValue(CharacterAppearanceData.PhotonKey, out var avatarJson))
             {
                 Debug.Log($"[SOTL Remote] Avatar update from player {targetPlayer.ActorNumber}");
@@ -127,6 +133,77 @@ namespace SOTL.Multiplayer
         public void OnRoomPropertiesUpdate(PhotonHashtable propertiesThatChanged) { }
         public void OnMasterClientSwitched(Player newMasterClient) { }
 
+        // ── IOnEventCallback ──────────────────────────────────────────────
+
+        public void OnEvent(EventData photonEvent)
+        {
+            if (photonEvent.Code != PositionEventCode) return;
+
+            int sender = photonEvent.Sender;
+
+            // Ignore own events
+            var net = LotNetworkManager.Instance;
+            if (net != null && sender == net.LocalActorNumber) return;
+
+            if (photonEvent.CustomData is float[] data && data.Length >= 6)
+            {
+                _remoteStates[sender] = new RemoteState
+                {
+                    targetPos  = new Vector3(data[0], data[1], data[2]),
+                    targetRotY = data[3],
+                    moveSpeed  = data[4],
+                    gait       = (int)data[5]
+                };
+
+                // If we have a GO but no state yet, snap to first position
+                if (_remotePlayers.TryGetValue(sender, out var go) && go != null)
+                {
+                    if (Vector3.Distance(go.transform.position, _remoteStates[sender].targetPos) > 10f)
+                    {
+                        // Snap if too far (first update or teleport)
+                        go.transform.position = _remoteStates[sender].targetPos;
+                        go.transform.eulerAngles = new Vector3(0f, _remoteStates[sender].targetRotY, 0f);
+                    }
+                }
+            }
+        }
+
+        // ── Interpolation ─────────────────────────────────────────────────
+
+        void InterpolateAll()
+        {
+            float dt = Time.deltaTime;
+
+            foreach (var kvp in _remoteStates)
+            {
+                int actorId = kvp.Key;
+                var state = kvp.Value;
+
+                if (!_remotePlayers.TryGetValue(actorId, out var go)) continue;
+                if (go == null) continue;
+
+                // Position
+                go.transform.position = Vector3.Lerp(
+                    go.transform.position, state.targetPos, _positionLerpSpeed * dt);
+
+                // Rotation
+                var currentRot = go.transform.eulerAngles;
+                float newY = Mathf.LerpAngle(currentRot.y, state.targetRotY, _rotationLerpSpeed * dt);
+                go.transform.eulerAngles = new Vector3(0f, newY, 0f);
+
+                // Animator
+                var animator = go.GetComponentInChildren<Animator>();
+                if (animator != null)
+                {
+                    animator.SetFloat(MoveSpeedHash, state.moveSpeed);
+                    animator.SetInteger(CurrentGaitHash, state.gait);
+                    animator.SetBool(IsGroundedHash, true);
+                    animator.SetBool(IsStoppedHash, state.moveSpeed < 0.1f);
+                    animator.SetFloat(IsStrafingHash, 1f);
+                }
+            }
+        }
+
         // ── Spawn / rebuild / remove ──────────────────────────────────────
 
         void SpawnOrRebuild(int actorNumber, string avatarJson)
@@ -134,7 +211,7 @@ namespace SOTL.Multiplayer
             var mgr = SidekickCharacterManager.Instance;
             if (mgr == null || !mgr.IsReady)
             {
-                Debug.LogWarning($"[SOTL Remote] SidekickCharacterManager not ready, deferring spawn for actor {actorNumber}.");
+                Debug.LogWarning($"[SOTL Remote] SidekickCharacterManager not ready for actor {actorNumber}.");
                 return;
             }
 
@@ -146,11 +223,7 @@ namespace SOTL.Multiplayer
             }
 
             string modelName = $"RemotePlayer_{actorNumber}";
-
-            // Check for existing
             _remotePlayers.TryGetValue(actorNumber, out var existing);
-
-            // If existing was destroyed externally, clear the reference
             if (existing != null && existing.Equals(null)) existing = null;
 
             var character = mgr.BuildCharacter(data, modelName, existing);
@@ -160,8 +233,22 @@ namespace SOTL.Multiplayer
                 return;
             }
 
-            // Position: Phase 2 uses static placement. Phase 3 replaces with live sync.
-            if (existing == null)
+            // Set initial grounded state on animator
+            var animator = character.GetComponentInChildren<Animator>();
+            if (animator != null)
+            {
+                animator.SetBool(IsGroundedHash, true);
+                animator.SetBool(IsStoppedHash, true);
+                animator.SetFloat(MoveSpeedHash, 0f);
+            }
+
+            // If we have a received position, snap to it. Otherwise use spawn slot.
+            if (_remoteStates.TryGetValue(actorNumber, out var state))
+            {
+                character.transform.position = state.targetPos;
+                character.transform.eulerAngles = new Vector3(0f, state.targetRotY, 0f);
+            }
+            else if (existing == null)
             {
                 int slot = _remotePlayers.Count;
                 character.transform.position = _spawnOrigin + Vector3.right * (slot * _spawnSpacing);
@@ -169,7 +256,7 @@ namespace SOTL.Multiplayer
             }
 
             _remotePlayers[actorNumber] = character;
-            Debug.Log($"[SOTL Remote] Spawned/rebuilt remote player {actorNumber} at {character.transform.position}");
+            Debug.Log($"[SOTL Remote] Spawned/rebuilt remote player {actorNumber}");
         }
 
         void RemoveRemotePlayer(int actorNumber)
@@ -178,13 +265,13 @@ namespace SOTL.Multiplayer
             {
                 if (go != null) Destroy(go);
                 _remotePlayers.Remove(actorNumber);
-                Debug.Log($"[SOTL Remote] Removed remote player {actorNumber}.");
             }
+            _remoteStates.Remove(actorNumber);
+            Debug.Log($"[SOTL Remote] Removed remote player {actorNumber}.");
         }
 
         // ── Public API ────────────────────────────────────────────────────
 
-        /// <summary>Number of currently tracked remote players.</summary>
         public int RemotePlayerCount => _remotePlayers.Count;
     }
 }
