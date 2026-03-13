@@ -159,6 +159,7 @@ namespace SOTL.Multiplayer
 
         public void OnJoinRandomFailed(short code, string message) { }
         public void OnLeftRoom() => Debug.Log("[SOTL Net] Left room.");
+        public void OnFriendListUpdate(System.Collections.Generic.List<FriendInfo> friendList) { }
 
         // ── Public API ────────────────────────────────────────────────────────
 
