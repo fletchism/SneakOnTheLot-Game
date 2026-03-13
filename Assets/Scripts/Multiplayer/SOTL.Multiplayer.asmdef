@@ -5,7 +5,8 @@
         "SOTL.Core",
         "SOTL.API",
         "Photon.Realtime",
-        "PhotonWebSocket"
+        "PhotonWebSocket",
+        "SidekickCharacters"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
