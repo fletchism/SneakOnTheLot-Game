@@ -583,14 +583,17 @@ namespace SOTL.Editor
 
             var canvasGO = new GameObject("StatsCanvas");
             canvasGO.AddComponent<Canvas>().renderMode = RenderMode.ScreenSpaceOverlay;
-            canvasGO.AddComponent<UnityEngine.UI.CanvasScaler>();
+            var scaler = canvasGO.AddComponent<UnityEngine.UI.CanvasScaler>();
+            scaler.uiScaleMode         = UnityEngine.UI.CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(1920f, 1080f);
+            scaler.matchWidthOrHeight  = 0.5f;
             canvasGO.AddComponent<UnityEngine.UI.GraphicRaycaster>();
 
             var panelGO = new GameObject("StatsPanel", typeof(RectTransform));
             panelGO.transform.SetParent(canvasGO.transform, false);
             var panelRT = panelGO.GetComponent<RectTransform>();
             panelRT.anchorMin = panelRT.anchorMax = panelRT.pivot = new Vector2(0.5f, 0.5f);
-            panelRT.sizeDelta = new Vector2(400f, 320f);
+            panelRT.sizeDelta = new Vector2(520f, 420f);
             panelGO.AddComponent<UnityEngine.UI.Image>().color = new Color(0.05f, 0.05f, 0.07f, 0.92f);
             panelGO.SetActive(false);
 

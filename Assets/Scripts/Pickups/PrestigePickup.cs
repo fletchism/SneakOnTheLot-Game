@@ -19,7 +19,10 @@ namespace SOTL.Pickups
             var sync = PrestigeSyncManager.Instance
                     ?? FindFirstObjectByType<PrestigeSyncManager>();
             if (sync != null)
+            {
                 sync.AddPending(prestigeAmount);
+                sync.ForceFlush();   // immediate Wix call — don't wait for 15-min batch
+            }
             else
                 Debug.LogWarning("[SOTL] PrestigePickup: PrestigeSyncManager not found.");
 
