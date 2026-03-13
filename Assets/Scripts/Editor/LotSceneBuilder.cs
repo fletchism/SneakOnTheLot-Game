@@ -28,6 +28,29 @@ namespace SOTL.Editor
         const string T_PRESTIGE_SYNC   = "SOTL.Pickups.PrestigeSyncManager, Assembly-CSharp";
         const string T_PRESTIGE_PICKUP = "SOTL.Pickups.PrestigePickup, Assembly-CSharp";
 
+        [MenuItem("SOTL/Scene/Clean Rebuild (delete + rebuild)", false, 10)]
+        public static void CleanRebuild()
+        {
+            bool confirmed = EditorUtility.DisplayDialog(
+                "Clean Rebuild",
+                "This will delete ALL objects in the current scene and rebuild from scratch.\n\nContinue?",
+                "Rebuild", "Cancel");
+            if (!confirmed) return;
+
+            // Delete every root GameObject in the scene
+            var roots = EditorSceneManager.GetActiveScene().GetRootGameObjects();
+            foreach (var go in roots)
+                Object.DestroyImmediate(go);
+
+            Debug.Log("[SOTL Scene] Scene cleared. Rebuilding...");
+
+            // Create NPC idle controller asset first (Build() depends on it)
+            CreateNPCIdleController();
+
+            // Full build
+            Build();
+        }
+
         [MenuItem("SOTL/2 - Build Lot Scene", false, 20)]
         public static void Build()
         {
