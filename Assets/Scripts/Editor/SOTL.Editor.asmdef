@@ -4,13 +4,13 @@
     "references": [
         "GUID:65fd80f12a0a54fefb6b155e464fc4a5",
         "GUID:9d8c50892f5704217b2e7c960d2605a8",
-        "GUID:4bcf934923d18438c9d84883ef5fcbc2",
         "GUID:05a56ada2c67e4cfe8562c118fdf84d5",
         "Unity.RenderPipelines.Universal.Runtime",
         "Unity.RenderPipelines.Core.Runtime",
         "Unity.Cinemachine",
         "Unity.InputSystem",
-        "Unity.InputSystem.ForUI"
+        "Unity.InputSystem.ForUI",
+        "Unity.TextMeshPro"
     ],
     "includePlatforms": ["Editor"],
     "excludePlatforms": [],
