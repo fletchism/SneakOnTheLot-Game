@@ -242,16 +242,26 @@ namespace SOTL.Player
 
         // ── Cycling ───────────────────────────────────────────────────────
 
-        void OnHeadPrev()  { _headIndex  = Wrap(_headIndex  - 1, _headPresets.Count);  Debug.Log($"[SOTL Customize] Head: {_headIndex}"); UpdateLabels(); }
-        void OnHeadNext()  { _headIndex  = Wrap(_headIndex  + 1, _headPresets.Count);  Debug.Log($"[SOTL Customize] Head: {_headIndex}"); UpdateLabels(); }
-        void OnUpperPrev() { _upperIndex = Wrap(_upperIndex - 1, _upperPresets.Count); Debug.Log($"[SOTL Customize] Upper: {_upperIndex}"); UpdateLabels(); }
-        void OnUpperNext() { _upperIndex = Wrap(_upperIndex + 1, _upperPresets.Count); Debug.Log($"[SOTL Customize] Upper: {_upperIndex}"); UpdateLabels(); }
-        void OnLowerPrev() { _lowerIndex = Wrap(_lowerIndex - 1, _lowerPresets.Count); Debug.Log($"[SOTL Customize] Lower: {_lowerIndex}"); UpdateLabels(); }
-        void OnLowerNext() { _lowerIndex = Wrap(_lowerIndex + 1, _lowerPresets.Count); Debug.Log($"[SOTL Customize] Lower: {_lowerIndex}"); UpdateLabels(); }
-        void OnBodyPrev()  { _bodyIndex  = Wrap(_bodyIndex  - 1, _bodyPresets.Count);  Debug.Log($"[SOTL Customize] Body: {_bodyIndex}"); UpdateLabels(); }
-        void OnBodyNext()  { _bodyIndex  = Wrap(_bodyIndex  + 1, _bodyPresets.Count);  Debug.Log($"[SOTL Customize] Body: {_bodyIndex}"); UpdateLabels(); }
+        void OnHeadPrev()  { _headIndex  = Wrap(_headIndex  - 1, _headPresets.Count);  UpdateLabels(); ApplyLivePreview(); }
+        void OnHeadNext()  { _headIndex  = Wrap(_headIndex  + 1, _headPresets.Count);  UpdateLabels(); ApplyLivePreview(); }
+        void OnUpperPrev() { _upperIndex = Wrap(_upperIndex - 1, _upperPresets.Count); UpdateLabels(); ApplyLivePreview(); }
+        void OnUpperNext() { _upperIndex = Wrap(_upperIndex + 1, _upperPresets.Count); UpdateLabels(); ApplyLivePreview(); }
+        void OnLowerPrev() { _lowerIndex = Wrap(_lowerIndex - 1, _lowerPresets.Count); UpdateLabels(); ApplyLivePreview(); }
+        void OnLowerNext() { _lowerIndex = Wrap(_lowerIndex + 1, _lowerPresets.Count); UpdateLabels(); ApplyLivePreview(); }
+        void OnBodyPrev()  { _bodyIndex  = Wrap(_bodyIndex  - 1, _bodyPresets.Count);  UpdateLabels(); ApplyLivePreview(); }
+        void OnBodyNext()  { _bodyIndex  = Wrap(_bodyIndex  + 1, _bodyPresets.Count);  UpdateLabels(); ApplyLivePreview(); }
 
         int Wrap(int idx, int count) => ((idx % count) + count) % count;
+
+        /// <summary>Rebuild the player character live as presets are cycled.</summary>
+        void ApplyLivePreview()
+        {
+            var player = GameObject.FindWithTag("Player");
+            if (player == null) return;
+            var sync = player.GetComponent<LocalCharacterSync>();
+            if (sync == null) return;
+            sync.ApplyAppearance(BuildAppearanceData());
+        }
 
         void UpdateLabels()
         {
@@ -269,22 +279,26 @@ namespace SOTL.Player
         {
             var data = BuildAppearanceData();
 
+            // Ensure final appearance is applied (in case no cycling happened)
             var player = GameObject.FindWithTag("Player");
             if (player != null)
             {
                 var sync = player.GetComponent<LocalCharacterSync>();
                 if (sync != null)
-                {
                     sync.ApplyAppearance(data);
-                    Debug.Log("[SOTL Customize] Appearance applied.");
-                }
             }
 
+            // Save to Wix for persistence across sessions
             var api = SOTLApiManager.Instance;
             if (api != null && api.IsLinked)
             {
-                api.SaveAvatar(data.ToJson(), ok =>
+                string json = data.ToJson();
+                api.SaveAvatar(json, ok =>
                     Debug.Log(ok ? "[SOTL Customize] Avatar saved to Wix." : "[SOTL Customize] Avatar save failed (fail-open)."));
+            }
+            else
+            {
+                Debug.Log("[SOTL Customize] Not linked — avatar not saved to Wix.");
             }
 
             Hide();
