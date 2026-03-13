@@ -32,6 +32,7 @@ namespace SOTL.Editor
         const string T_LOCAL_CHAR_SYNC = "SOTL.Player.LocalCharacterSync, Assembly-CSharp";
         const string T_SIDEKICK_MGR    = "SOTL.Multiplayer.SidekickCharacterManager, SOTL.Multiplayer";
         const string T_REMOTE_MGR      = "SOTL.Multiplayer.RemotePlayerManager, SOTL.Multiplayer";
+        const string T_CUSTOMIZE_UI   = "SOTL.Player.CharacterCustomizationUI, Assembly-CSharp";
 
         [MenuItem("SOTL/Scene/Clean Rebuild (delete + rebuild)", false, 10)]
         public static void CleanRebuild()
@@ -85,6 +86,7 @@ namespace SOTL.Editor
             CreateManagers(config);
             CreatePrestigePickup();
             CreateHUD();
+            CreateCustomizationUI();
 
             EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
             Debug.Log("[SOTL Scene] Done. Save scene (Cmd+S) then hit Play.");
@@ -789,6 +791,25 @@ namespace SOTL.Editor
 
             Undo.RegisterCreatedObjectUndo(canvasGO, "Create HUD");
             Debug.Log("[SOTL Scene] HUD created and wired.");
+        }
+
+        static void CreateCustomizationUI()
+        {
+            if (GameObject.Find("CustomizationCanvas"))
+            {
+                Debug.Log("[SOTL Scene] CustomizationCanvas already in scene — skipping.");
+                return;
+            }
+
+            var canvasGO = new GameObject("CustomizationCanvas");
+            var customizeType = System.Type.GetType(T_CUSTOMIZE_UI);
+            if (customizeType != null)
+                canvasGO.AddComponent(customizeType);
+            else
+                Debug.LogWarning("[SOTL Scene] CharacterCustomizationUI type not found — compile first.");
+
+            Undo.RegisterCreatedObjectUndo(canvasGO, "Create CustomizationCanvas");
+            Debug.Log("[SOTL Scene] CustomizationCanvas created.");
         }
 
         static Transform FindDeepChild(Transform parent, string name)

@@ -1,3 +1,4 @@
+using SOTL.API;
 using SOTL.Multiplayer;
 using UnityEngine;
 
@@ -7,20 +8,21 @@ namespace SOTL.Player
     /// Sender side of character appearance sync. Attached to the local player GO.
     ///
     /// Responsibilities:
-    /// 1. Build/rebuild the local player's Sidekick mesh from CharacterAppearanceData.
-    /// 2. Broadcast appearance to Photon custom player properties.
-    /// 3. Swap LotPlayerController's Animator reference to the new mesh's Animator.
+    /// 1. On session start: load saved avatar from Wix or show character creator.
+    /// 2. Build/rebuild the local player's Sidekick mesh from CharacterAppearanceData.
+    /// 3. Broadcast appearance to Photon custom player properties.
+    /// 4. Swap LotPlayerController's Animator reference to the new mesh's Animator.
     ///
     /// Lives in Assembly-CSharp (Player folder) because it bridges SOTL.Multiplayer
     /// types (SidekickCharacterManager, LotNetworkManager) and SOTL.Player types
-    /// (LotPlayerController). asmdef assemblies cannot reference Assembly-CSharp.
+    /// (LotPlayerController).
     ///
     /// Phase 2: appearance only. Position sync is Phase 3.
     /// </summary>
     public class LocalCharacterSync : MonoBehaviour
     {
         [Header("State")]
-        [Tooltip("Current appearance. Set via ApplyAppearance() or the customization UI.")]
+        [Tooltip("Current appearance. Set via ApplyAppearance() or loaded from Wix.")]
         [SerializeField] private CharacterAppearanceData _currentAppearance;
 
         private GameObject _builtCharacter;
@@ -28,6 +30,7 @@ namespace SOTL.Player
         private SkinnedMeshRenderer[] _originalMeshes;
         private bool _applied;
         private bool _broadcastPending;
+        private bool _sessionCheckDone;
 
         // ── Lifecycle ─────────────────────────────────────────────────────
 
@@ -40,6 +43,12 @@ namespace SOTL.Player
 
         void Update()
         {
+            // Session start: check for saved avatar once managers are ready
+            if (!_sessionCheckDone)
+            {
+                TrySessionCheck();
+            }
+
             // Deferred build: wait for SidekickCharacterManager to be ready
             if (!_applied && _currentAppearance != null && _currentAppearance.parts.Count > 0)
             {
@@ -60,6 +69,71 @@ namespace SOTL.Player
                     BroadcastToPhoton();
                     _broadcastPending = false;
                 }
+            }
+        }
+
+        // ── Session start check ───────────────────────────────────────────
+
+        void TrySessionCheck()
+        {
+            var api = SOTLApiManager.Instance;
+            var mgr = SidekickCharacterManager.Instance;
+
+            // Need both managers ready
+            if (api == null || mgr == null || !mgr.IsReady) return;
+
+            // Not linked yet — skip for now, will trigger after link
+            if (!api.IsLinked)
+            {
+                _sessionCheckDone = true;
+                // Show creator with local-only mode (no save)
+                ShowCreatorIfAvailable();
+                return;
+            }
+
+            // If we already have state loaded with an avatar, use it
+            if (api.CurrentState != null)
+            {
+                HandleLoadedState(api.CurrentState);
+                return;
+            }
+
+            // Fetch state from Wix
+            _sessionCheckDone = true; // Prevent re-entry
+            api.FetchMemberState(state => HandleLoadedState(state));
+        }
+
+        void HandleLoadedState(PlayerState state)
+        {
+            _sessionCheckDone = true;
+
+            if (state != null && !string.IsNullOrEmpty(state.avatarJson))
+            {
+                // Saved avatar exists — apply it
+                var data = CharacterAppearanceData.FromJson(state.avatarJson);
+                if (data != null && data.parts.Count > 0)
+                {
+                    Debug.Log("[SOTL LocalSync] Loaded saved avatar from Wix.");
+                    ApplyAppearance(data);
+                    return;
+                }
+            }
+
+            // No saved avatar — show creator
+            Debug.Log("[SOTL LocalSync] No saved avatar. Opening character creator.");
+            ShowCreatorIfAvailable();
+        }
+
+        void ShowCreatorIfAvailable()
+        {
+            var creator = Object.FindFirstObjectByType<CharacterCustomizationUI>();
+            if (creator != null)
+            {
+                creator.Show();
+            }
+            else
+            {
+                Debug.LogWarning("[SOTL LocalSync] CharacterCustomizationUI not found in scene.");
             }
         }
 
