@@ -130,16 +130,16 @@ namespace SOTL.Player
             y -= 70f;
 
             // Preset rows
-            _headLabel  = MakePresetRow(panel, "HEAD", y, () => CyclePreset(ref _headIndex, _headPresets, -1), () => CyclePreset(ref _headIndex, _headPresets, 1));
+            _headLabel  = MakePresetRow(panel, "HEAD", y, OnHeadPrev, OnHeadNext);
             y -= 90f;
-            _upperLabel = MakePresetRow(panel, "OUTFIT TOP", y, () => CyclePreset(ref _upperIndex, _upperPresets, -1), () => CyclePreset(ref _upperIndex, _upperPresets, 1));
+            _upperLabel = MakePresetRow(panel, "OUTFIT TOP", y, OnUpperPrev, OnUpperNext);
             y -= 90f;
-            _lowerLabel = MakePresetRow(panel, "OUTFIT BOTTOM", y, () => CyclePreset(ref _lowerIndex, _lowerPresets, -1), () => CyclePreset(ref _lowerIndex, _lowerPresets, 1));
+            _lowerLabel = MakePresetRow(panel, "OUTFIT BOTTOM", y, OnLowerPrev, OnLowerNext);
             y -= 90f;
 
             if (_bodyPresets.Count > 0)
             {
-                _bodyLabel = MakePresetRow(panel, "BODY SHAPE", y, () => CyclePreset(ref _bodyIndex, _bodyPresets, -1), () => CyclePreset(ref _bodyIndex, _bodyPresets, 1));
+                _bodyLabel = MakePresetRow(panel, "BODY SHAPE", y, OnBodyPrev, OnBodyNext);
                 y -= 90f;
             }
 
@@ -242,17 +242,16 @@ namespace SOTL.Player
 
         // ── Cycling ───────────────────────────────────────────────────────
 
-        void CyclePreset(ref int index, IList<SidekickPartPreset> presets, int dir)
-        {
-            index = ((index + dir) % presets.Count + presets.Count) % presets.Count;
-            UpdateLabels();
-        }
+        void OnHeadPrev()  { _headIndex  = Wrap(_headIndex  - 1, _headPresets.Count);  Debug.Log($"[SOTL Customize] Head: {_headIndex}"); UpdateLabels(); }
+        void OnHeadNext()  { _headIndex  = Wrap(_headIndex  + 1, _headPresets.Count);  Debug.Log($"[SOTL Customize] Head: {_headIndex}"); UpdateLabels(); }
+        void OnUpperPrev() { _upperIndex = Wrap(_upperIndex - 1, _upperPresets.Count); Debug.Log($"[SOTL Customize] Upper: {_upperIndex}"); UpdateLabels(); }
+        void OnUpperNext() { _upperIndex = Wrap(_upperIndex + 1, _upperPresets.Count); Debug.Log($"[SOTL Customize] Upper: {_upperIndex}"); UpdateLabels(); }
+        void OnLowerPrev() { _lowerIndex = Wrap(_lowerIndex - 1, _lowerPresets.Count); Debug.Log($"[SOTL Customize] Lower: {_lowerIndex}"); UpdateLabels(); }
+        void OnLowerNext() { _lowerIndex = Wrap(_lowerIndex + 1, _lowerPresets.Count); Debug.Log($"[SOTL Customize] Lower: {_lowerIndex}"); UpdateLabels(); }
+        void OnBodyPrev()  { _bodyIndex  = Wrap(_bodyIndex  - 1, _bodyPresets.Count);  Debug.Log($"[SOTL Customize] Body: {_bodyIndex}"); UpdateLabels(); }
+        void OnBodyNext()  { _bodyIndex  = Wrap(_bodyIndex  + 1, _bodyPresets.Count);  Debug.Log($"[SOTL Customize] Body: {_bodyIndex}"); UpdateLabels(); }
 
-        void CyclePreset(ref int index, IList<SidekickBodyShapePreset> presets, int dir)
-        {
-            index = ((index + dir) % presets.Count + presets.Count) % presets.Count;
-            UpdateLabels();
-        }
+        int Wrap(int idx, int count) => ((idx % count) + count) % count;
 
         void UpdateLabels()
         {
