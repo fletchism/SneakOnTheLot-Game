@@ -1,0 +1,17 @@
+{
+    "name": "SOTL.Multiplayer",
+    "rootNamespace": "SOTL.Multiplayer",
+    "references": [
+        "SOTL.Core",
+        "SOTL.API"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
