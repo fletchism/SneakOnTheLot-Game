@@ -616,6 +616,20 @@ namespace SOTL.Editor
             var root = new GameObject("[Managers]");
             root.AddComponent<GameManager>();
 
+            // Network manager — wired with config so PhotonAppId is available at Start()
+            var netGO   = new GameObject("LotNetworkManager");
+            netGO.transform.SetParent(root.transform);
+            var netType = System.Type.GetType("SOTL.Multiplayer.LotNetworkManager, SOTL.Multiplayer");
+            if (netType != null)
+            {
+                var net   = netGO.AddComponent(netType);
+                var netSO = new SerializedObject(net);
+                netSO.FindProperty("_config").objectReferenceValue = config;
+                netSO.ApplyModifiedPropertiesWithoutUndo();
+            }
+            else
+                Debug.LogWarning("[SOTL Scene] LotNetworkManager type not found — compile first.");
+
             var apiGO = new GameObject("SOTLApiManager");
             apiGO.transform.SetParent(root.transform);
             var api = apiGO.AddComponent<SOTLApiManager>();
