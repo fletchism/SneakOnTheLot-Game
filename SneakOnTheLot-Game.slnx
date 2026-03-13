@@ -1,10 +1,16 @@
 ﻿<Solution>
-  <Project Path="OpenClaw.ClaudeBridge.Editor.csproj" />
-  <Project Path="SOTL.Editor.csproj" />
   <Project Path="Assembly-CSharp.csproj" />
+  <Project Path="Photon.Realtime.csproj" />
+  <Project Path="SidekickCharacters.Editor.csproj" />
+  <Project Path="SidekickCharacters.csproj" />
+  <Project Path="OpenClaw.ClaudeBridge.Editor.csproj" />
+  <Project Path="Gilzoide.SqliteNet.csproj" />
+  <Project Path="Photon.Chat.csproj" />
+  <Project Path="SOTL.Editor.csproj" />
   <Project Path="SOTL.UI.csproj" />
   <Project Path="SOTL.API.csproj" />
-  <Project Path="SOTL.Core.csproj" />
-  <Project Path="SOTL.Player.csproj" />
+  <Project Path="Gilzoide.SqliteNet.Tests.Editor.csproj" />
   <Project Path="Assembly-CSharp-Editor.csproj" />
+  <Project Path="SOTL.Multiplayer.csproj" />
+  <Project Path="SOTL.Core.csproj" />
 </Solution>

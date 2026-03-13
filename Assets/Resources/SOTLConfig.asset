@@ -1,0 +1,18 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8537135c8f96648df99b2189fec3ce10, type: 3}
+  m_Name: SOTLConfig
+  m_EditorClassIdentifier: SOTL.API::SOTL.API.SOTLConfig
+  BaseUrl: https://www.sneakonthelot.com
+  ApiSecret: 8f18a612e3bc1461af24140db4d88d47c9579781c5865b4af95cd69e43affe9b
+  PhotonAppId: 3195c256-d3b1-4de5-b67f-122820261964
+  PhotonRegion: us

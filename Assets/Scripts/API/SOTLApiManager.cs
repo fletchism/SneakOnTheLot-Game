@@ -124,12 +124,48 @@ namespace SOTL.API
             if (req.result != UnityWebRequest.Result.Success)
                 Debug.LogWarning($"[SOTL] XP award failed (fail-open): {req.error}");
         }
+
+        // ── Prestige Award ────────────────────────────────────────────────────
+
+        /// <summary>POST /_functions/prestigeAward — batched flush, fail-open</summary>
+        public void AwardPrestige(float amount, Action<bool, float> callback = null)
+        {
+            if (!IsLinked) return;
+            StartCoroutine(PostPrestigeAward(amount, callback));
+        }
+
+        IEnumerator PostPrestigeAward(float amount, Action<bool, float> callback)
+        {
+            var url  = $"{config.BaseUrl}/_functions/prestigeAward";
+            var body = new PrestigeAwardRequest { memberId = LinkedMemberId, amount = amount };
+            var json = JsonUtility.ToJson(body);
+            using var req = new UnityWebRequest(url, "POST");
+            req.uploadHandler   = new UploadHandlerRaw(Encoding.UTF8.GetBytes(json));
+            req.downloadHandler = new DownloadHandlerBuffer();
+            req.SetRequestHeader("Content-Type",  "application/json");
+            req.SetRequestHeader("Authorization", $"Bearer {config.ApiSecret}");
+            yield return req.SendWebRequest();
+
+            if (req.result == UnityWebRequest.Result.Success)
+            {
+                var resp = JsonUtility.FromJson<PrestigeAwardResponse>(req.downloadHandler.text);
+                if (CurrentState != null) CurrentState.prestigeBalance = resp.prestigeBalance;
+                callback?.Invoke(true, resp.prestigeBalance);
+            }
+            else
+            {
+                Debug.LogWarning($"[SOTL] Prestige award failed (fail-open): {req.error}");
+                callback?.Invoke(false, 0f);
+            }
+        }
     }
 
     // ── Data models ───────────────────────────────────────────────────────────
 
-    [Serializable] public class LinkResponse    { public string memberId; }
-    [Serializable] public class XpAwardRequest  { public string memberId, source, sourceId, metadata; }
+    [Serializable] public class LinkResponse         { public string memberId; }
+    [Serializable] public class XpAwardRequest       { public string memberId, source, sourceId, metadata; }
+    [Serializable] public class PrestigeAwardRequest { public string memberId; public float amount; }
+    [Serializable] public class PrestigeAwardResponse{ public bool success; public float prestigeBalance; }
 
     [Serializable]
     public class PlayerState
