@@ -143,15 +143,22 @@ namespace SOTL.Editor
 
         static void CreatePlayer()
         {
-            // Remove stale objects from previous builds (always rebuild player clean)
-            foreach (var n in new[] { "SyntyCamera", "PF_SyntyCamera", "PF_SidekickPlayer", "Player" })
+            // Remove stale Synty sample prefab instances (never our objects)
+            foreach (var n in new[] { "SyntyCamera", "PF_SyntyCamera", "PF_SidekickPlayer" })
             {
                 var stale = GameObject.Find(n);
-                if (stale != null)
-                {
-                    Object.DestroyImmediate(stale);
-                    Debug.Log($"[SOTL Scene] Removed stale object: {n}");
-                }
+                if (stale != null) { Object.DestroyImmediate(stale); Debug.Log($"[SOTL Scene] Removed stale: {n}"); }
+            }
+
+            // If a fully-built Player already exists, leave it alone
+            var existing = GameObject.Find("Player");
+            if (existing != null)
+            {
+                var hasCtrl = existing.GetComponent(System.Type.GetType(T_PLAYER_CTRL)) != null;
+                if (hasCtrl) { Debug.Log("[SOTL Scene] Player already built — skipping."); return; }
+                // Player exists but is missing our component — remove and rebuild
+                Object.DestroyImmediate(existing);
+                Debug.Log("[SOTL Scene] Removed incomplete Player — rebuilding.");
             }
 
             // ── Root ──────────────────────────────────────────────────
@@ -232,9 +239,15 @@ namespace SOTL.Editor
 
         static void CreateCameraRig()
         {
-            // Always destroy and rebuild so references stay in sync with Player
-            var staleRig = GameObject.Find("CameraRig");
-            if (staleRig != null) Object.DestroyImmediate(staleRig);
+            // If a fully-built CameraRig already exists, leave it alone
+            var existingRig = GameObject.Find("CameraRig");
+            if (existingRig != null)
+            {
+                var hasCtrl = existingRig.GetComponent(System.Type.GetType(T_CAMERA_CTRL)) != null;
+                if (hasCtrl) { Debug.Log("[SOTL Scene] CameraRig already built — skipping."); return; }
+                Object.DestroyImmediate(existingRig);
+                Debug.Log("[SOTL Scene] Removed incomplete CameraRig — rebuilding.");
+            }
 
             // Remove default Main Camera if not already under a rig
             var defaultCam = GameObject.Find("Main Camera");
