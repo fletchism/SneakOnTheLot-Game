@@ -458,5 +458,18 @@ namespace SOTL.Player
             _animator.SetBool(_isWalkingHash,             _isWalking);
             _animator.SetBool(_isStoppedHash,             _isStopped);
         }
+
+        // ── External API ──────────────────────────────────────────────
+
+        /// <summary>
+        /// Swap the animator reference used by this controller.
+        /// Called by LocalCharacterSync when the local player's mesh is rebuilt.
+        /// </summary>
+        public void SwapAnimator(Animator newAnimator)
+        {
+            _animator = newAnimator;
+            Debug.Log("[LotPlayerController] Animator swapped.");
+        }
     }
 }
+
