@@ -143,8 +143,8 @@ namespace SOTL.Editor
 
         static void CreatePlayer()
         {
-            // Remove stale Synty sample objects from previous builds
-            foreach (var n in new[] { "SyntyCamera", "PF_SyntyCamera", "PF_SidekickPlayer" })
+            // Remove stale objects from previous builds (always rebuild player clean)
+            foreach (var n in new[] { "SyntyCamera", "PF_SyntyCamera", "PF_SidekickPlayer", "Player" })
             {
                 var stale = GameObject.Find(n);
                 if (stale != null)
@@ -153,8 +153,6 @@ namespace SOTL.Editor
                     Debug.Log($"[SOTL Scene] Removed stale object: {n}");
                 }
             }
-
-            if (GameObject.Find("Player") != null) return;
 
             // ── Root ──────────────────────────────────────────────────
             var player = new GameObject("Player");
@@ -234,7 +232,9 @@ namespace SOTL.Editor
 
         static void CreateCameraRig()
         {
-            if (GameObject.Find("CameraRig") != null) return;
+            // Always destroy and rebuild so references stay in sync with Player
+            var staleRig = GameObject.Find("CameraRig");
+            if (staleRig != null) Object.DestroyImmediate(staleRig);
 
             // Remove default Main Camera if not already under a rig
             var defaultCam = GameObject.Find("Main Camera");
@@ -612,8 +612,15 @@ namespace SOTL.Editor
                 System.Reflection.BindingFlags.NonPublic |
                 System.Reflection.BindingFlags.Public |
                 System.Reflection.BindingFlags.Instance);
-            if (f != null) f.SetValue(obj, value);
-            else Debug.LogWarning($"[SOTL Scene] Field not found: {obj.GetType().Name}.{fieldName}");
+            if (f != null)
+            {
+                f.SetValue(obj, value);
+                // Mark dirty so Unity serializes the reference to the scene file
+                if (obj is UnityEngine.Object unityObj)
+                    EditorUtility.SetDirty(unityObj);
+            }
+            else
+                Debug.LogWarning($"[SOTL Scene] Field not found: {obj.GetType().Name}.{fieldName}");
         }
     }
 }
