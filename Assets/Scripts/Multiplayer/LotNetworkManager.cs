@@ -176,6 +176,15 @@ namespace SOTL.Multiplayer
         /// <summary>Get the current room's player dictionary, or null if not in a room.</summary>
         public System.Collections.Generic.Dictionary<int, Player> GetRoomPlayers()
             => _client?.CurrentRoom?.Players;
+
+        /// <summary>Set a custom property on the local player and broadcast to room.</summary>
+        public bool SetLocalPlayerProperty(string key, string value)
+        {
+            if (_client?.LocalPlayer == null) return false;
+            var props = new Photon.Client.PhotonHashtable { { key, value } };
+            return _client.LocalPlayer.SetCustomProperties(props);
+        }
     }
 }
+
 
