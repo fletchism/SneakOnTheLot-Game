@@ -8,7 +8,7 @@ namespace SOTL.API
 {
     /// <summary>
     /// Singleton. Handles all REST calls to the Wix SOTL backend.
-    /// Endpoints: memberState, xpAward, unityLink
+    /// Endpoints: memberState, xpAward, unityLink, prestigeAward, avatarSave
     /// Auth: Bearer UNITY_API_SECRET (set in SOTLConfig ScriptableObject)
     /// </summary>
     public class SOTLApiManager : MonoBehaviour
@@ -158,6 +158,40 @@ namespace SOTL.API
                 callback?.Invoke(false, 0f);
             }
         }
+
+        // ── Avatar Save ───────────────────────────────────────────────────────
+
+        /// <summary>POST /_functions/avatarSave — persist character appearance to Wix</summary>
+        public void SaveAvatar(string avatarJson, Action<bool> callback = null)
+        {
+            if (!IsLinked) { callback?.Invoke(false); return; }
+            StartCoroutine(PostAvatarSave(avatarJson, callback));
+        }
+
+        IEnumerator PostAvatarSave(string avatarJson, Action<bool> callback)
+        {
+            var url  = $"{config.BaseUrl}/_functions/avatarSave";
+            var body = new AvatarSaveRequest { memberId = LinkedMemberId, avatarJson = avatarJson };
+            var json = JsonUtility.ToJson(body);
+            using var req = new UnityWebRequest(url, "POST");
+            req.uploadHandler   = new UploadHandlerRaw(Encoding.UTF8.GetBytes(json));
+            req.downloadHandler = new DownloadHandlerBuffer();
+            req.SetRequestHeader("Content-Type",  "application/json");
+            req.SetRequestHeader("Authorization", $"Bearer {config.ApiSecret}");
+            yield return req.SendWebRequest();
+
+            if (req.result == UnityWebRequest.Result.Success)
+            {
+                Debug.Log("[SOTL] Avatar saved to Wix.");
+                if (CurrentState != null) CurrentState.avatarJson = avatarJson;
+                callback?.Invoke(true);
+            }
+            else
+            {
+                Debug.LogWarning($"[SOTL] Avatar save failed (fail-open): {req.error}");
+                callback?.Invoke(false);
+            }
+        }
     }
 
     // ── Data models ───────────────────────────────────────────────────────────
@@ -166,6 +200,7 @@ namespace SOTL.API
     [Serializable] public class XpAwardRequest       { public string memberId, source, sourceId, metadata; }
     [Serializable] public class PrestigeAwardRequest { public string memberId; public float amount; }
     [Serializable] public class PrestigeAwardResponse{ public bool success; public float prestigeBalance; }
+    [Serializable] public class AvatarSaveRequest    { public string memberId; public string avatarJson; }
 
     [Serializable]
     public class PlayerState
@@ -176,5 +211,6 @@ namespace SOTL.API
         public float prestigeBalance;
         public float fame;
         public bool unityLinked;
+        public string avatarJson;
     }
 }
