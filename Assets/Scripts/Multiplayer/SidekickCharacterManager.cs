@@ -5,6 +5,7 @@ using Synty.SidekickCharacters.API;
 using Synty.SidekickCharacters.Database;
 using Synty.SidekickCharacters.Database.DTO;
 using Synty.SidekickCharacters.Enums;
+using Synty.SidekickCharacters.Utils;
 using UnityEngine;
 
 namespace SOTL.Multiplayer
