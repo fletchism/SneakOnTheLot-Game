@@ -635,7 +635,7 @@ namespace SOTL.Editor
 
         static void CreatePrestigePickup()
         {
-            const string FX_PATH    = "Assets/PolygonParticleFX/Prefabs/FX_Pickup_Boost_01.prefab";
+            const string FX_PATH     = "Assets/PolygonParticleFX/Prefabs/FX_Pickup_Boost_01.prefab";
             const string PICKUP_NAME = "PrestigePickup_01";
 
             if (GameObject.Find(PICKUP_NAME))
@@ -644,42 +644,35 @@ namespace SOTL.Editor
                 return;
             }
 
-            // Root pickup object with sphere trigger
+            // Root — trigger collider only, no mesh
             var go = new GameObject(PICKUP_NAME);
-            go.transform.position = new Vector3(-4f, 0.6f, 4f); // away from NPC at (3,0,3)
+            go.transform.position = new Vector3(-4f, 0.6f, 4f);
 
             var col = go.AddComponent<SphereCollider>();
             col.isTrigger = true;
-            col.radius    = 0.6f;
+            col.radius    = 0.8f;
 
-            // Visual — small sphere to represent the pickup in editor/play
-            var visual = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            visual.name = "Visual";
-            visual.transform.SetParent(go.transform, false);
-            visual.transform.localScale = Vector3.one * 0.4f;
-            Object.DestroyImmediate(visual.GetComponent<SphereCollider>());
-            // Gold-ish colour via material property block
-            var rend = visual.GetComponent<Renderer>();
-            rend.sharedMaterial = new Material(Shader.Find("Universal Render Pipeline/Lit"));
-            rend.sharedMaterial.color = new Color(1f, 0.84f, 0f);
+            // Visual — FX_Pickup_Boost_01 looping particles as child
+            var fxPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(FX_PATH);
+            if (fxPrefab != null)
+            {
+                var fx = (GameObject)PrefabUtility.InstantiatePrefab(fxPrefab, go.transform);
+                fx.transform.localPosition = Vector3.zero;
+                fx.transform.localRotation = Quaternion.identity;
+            }
+            else
+                Debug.LogWarning("[SOTL Scene] FX_Pickup_Boost_01.prefab not found — assign visual manually.");
 
-            // VFX prefab reference
-            var fxPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(FX_PATH);
-
+            // PrestigePickup component
             var pickupType = System.Type.GetType(T_PRESTIGE_PICKUP);
             if (pickupType == null)
             {
                 Debug.LogWarning("[SOTL Scene] PrestigePickup type not found — compile first.");
                 return;
             }
-            var pickup = go.AddComponent(pickupType);
-            // Wire vfxPrefab via SerializedObject so it survives domain reload
+            var pickup   = go.AddComponent(pickupType);
             var pickupSO = new SerializedObject(pickup);
             pickupSO.FindProperty("prestigeAmount").floatValue = 1f;
-            if (fxPrefab != null)
-                pickupSO.FindProperty("vfxPrefab").objectReferenceValue = fxPrefab;
-            else
-                Debug.LogWarning("[SOTL Scene] FX_Pickup_Boost_01.prefab not found — assign vfxPrefab manually.");
             pickupSO.ApplyModifiedPropertiesWithoutUndo();
 
             Undo.RegisterCreatedObjectUndo(go, "Create Prestige Pickup");
