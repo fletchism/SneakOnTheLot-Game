@@ -166,5 +166,16 @@ namespace SOTL.Multiplayer
         public bool IsConnected  => _client?.IsConnected  ?? false;
         public bool IsInRoom     => _client?.InRoom        ?? false;
         public int  PlayerCount  => _client?.CurrentRoom?.PlayerCount ?? 0;
+
+        /// <summary>Register an external callback target with the Photon client.</summary>
+        public void RegisterCallbacks(object target) => _client?.AddCallbackTarget(target);
+
+        /// <summary>Unregister an external callback target from the Photon client.</summary>
+        public void UnregisterCallbacks(object target) => _client?.RemoveCallbackTarget(target);
+
+        /// <summary>Get the current room's player dictionary, or null if not in a room.</summary>
+        public System.Collections.Generic.Dictionary<int, Player> GetRoomPlayers()
+            => _client?.CurrentRoom?.Players;
     }
 }
+
