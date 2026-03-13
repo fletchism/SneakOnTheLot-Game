@@ -108,7 +108,7 @@ namespace SOTL.Player
 
             // ── Full-screen dark overlay ──
             var bg = MakeFullRect("Background", transform);
-            var bgImg = bg.AddComponent<Image>();
+            var bgImg = bg.gameObject.AddComponent<Image>();
             bgImg.color = new Color(0f, 0f, 0f, 0.85f);
             bgImg.raycastTarget = true;
 
