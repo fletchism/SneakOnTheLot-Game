@@ -29,6 +29,9 @@ namespace SOTL.Editor
         const string T_CAMERA_CTRL     = "SOTL.Player.LotCameraController, Assembly-CSharp";
         const string T_PRESTIGE_SYNC   = "SOTL.Pickups.PrestigeSyncManager, Assembly-CSharp";
         const string T_PRESTIGE_PICKUP = "SOTL.Pickups.PrestigePickup, Assembly-CSharp";
+        const string T_LOCAL_CHAR_SYNC = "SOTL.Player.LocalCharacterSync, Assembly-CSharp";
+        const string T_SIDEKICK_MGR    = "SOTL.Multiplayer.SidekickCharacterManager, SOTL.Multiplayer";
+        const string T_REMOTE_MGR      = "SOTL.Multiplayer.RemotePlayerManager, SOTL.Multiplayer";
 
         [MenuItem("SOTL/Scene/Clean Rebuild (delete + rebuild)", false, 10)]
         public static void CleanRebuild()
@@ -261,6 +264,13 @@ namespace SOTL.Editor
             }
             else
                 Debug.LogWarning("[SOTL Scene] LotPlayerController type not found — recompile first.");
+
+            // ── LocalCharacterSync (broadcasts appearance to Photon) ──
+            var localSyncType = System.Type.GetType(T_LOCAL_CHAR_SYNC);
+            if (localSyncType != null)
+                player.AddComponent(localSyncType);
+            else
+                Debug.LogWarning("[SOTL Scene] LocalCharacterSync type not found — compile first.");
 
             Undo.RegisterCreatedObjectUndo(player, "Create Player");
             Debug.Log("[SOTL Scene] Player created.");
@@ -646,6 +656,34 @@ namespace SOTL.Editor
             else
                 Debug.LogWarning("[SOTL Scene] PrestigeSyncManager type not found — compile first.");
 
+            // SidekickCharacterManager — wraps Synty runtime for character building
+            var skMgrGO = new GameObject("SidekickCharacterManager");
+            skMgrGO.transform.SetParent(root.transform);
+            var skMgrType = System.Type.GetType(T_SIDEKICK_MGR);
+            if (skMgrType != null)
+            {
+                var skMgr = skMgrGO.AddComponent(skMgrType);
+                // Wire the locomotion controller so built characters get animation
+                var animCtrl = AssetDatabase.LoadAssetAtPath<RuntimeAnimatorController>(PLAYER_ANIM);
+                if (animCtrl != null)
+                {
+                    var skSO = new SerializedObject(skMgr);
+                    skSO.FindProperty("_animatorController").objectReferenceValue = animCtrl;
+                    skSO.ApplyModifiedPropertiesWithoutUndo();
+                }
+            }
+            else
+                Debug.LogWarning("[SOTL Scene] SidekickCharacterManager type not found — compile first.");
+
+            // RemotePlayerManager — spawns/rebuilds remote players from Photon properties
+            var remoteMgrGO = new GameObject("RemotePlayerManager");
+            remoteMgrGO.transform.SetParent(root.transform);
+            var remoteMgrType = System.Type.GetType(T_REMOTE_MGR);
+            if (remoteMgrType != null)
+                remoteMgrGO.AddComponent(remoteMgrType);
+            else
+                Debug.LogWarning("[SOTL Scene] RemotePlayerManager type not found — compile first.");
+
             Undo.RegisterCreatedObjectUndo(root, "Create Managers");
             Debug.Log("[SOTL Scene] Managers created.");
         }
@@ -831,3 +869,4 @@ namespace SOTL.Editor
     }
 }
 #endif
+
