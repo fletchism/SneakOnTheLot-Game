@@ -1,13 +1,9 @@
 {
-    "name": "SOTL.Multiplayer",
-    "rootNamespace": "SOTL.Multiplayer",
-    "references": [
-        "SOTL.Core",
-        "SOTL.API",
-        "Photon.Realtime",
-        "PhotonWebSocket"
+    "name": "PhotonWebSocket",
+    "references": [],
+    "includePlatforms": [
+        "WebGL"
     ],
-    "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
     "overrideReferences": false,
