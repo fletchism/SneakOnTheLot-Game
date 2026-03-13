@@ -22,7 +22,7 @@ namespace SOTL.Editor
         const string IDLE_CTRL    = "Assets/Animations/NPC/AC_NPC_Idle_Masculine.controller";
 
         // Reflection type strings (Assembly-CSharp — no direct asmdef reference from Editor)
-        const string HUD_PREFAB        = "Assets/Synty/InterfaceMilitaryCombatHUD/Prefabs/_PreMadeHUDs/Screen_MilitaryCombat_HUD_3rdPerson_01.prefab";
+        const string HUD_PREFAB        = "Assets/Synty/InterfaceMilitaryCombatHUD/Prefabs/_PreMadeHUDs/Screen_MilitaryCombat_HUD_LooterShooter_01.prefab";
         const string T_HUD_CTRL        = "SOTL.UI.LotHUDController, SOTL.UI";
         const string T_INPUT_READER    = "Synty.AnimationBaseLocomotion.Samples.InputSystem.InputReader, Assembly-CSharp";
         const string T_PLAYER_CTRL     = "SOTL.Player.LotPlayerController, Assembly-CSharp";
@@ -688,7 +688,7 @@ namespace SOTL.Editor
 
         static void CreateHUD()
         {
-            const string HUD_GO_NAME = "HUD_MilitaryCombat_3rdPerson";
+            const string HUD_GO_NAME = "HUD_MilitaryCombat_LooterShooter";
             if (GameObject.Find(HUD_GO_NAME))
             {
                 Debug.Log("[SOTL Scene] HUD already in scene — skipping.");
