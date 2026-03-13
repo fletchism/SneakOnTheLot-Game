@@ -49,7 +49,7 @@ namespace SOTL.UI
             if (_xpText      != null) _xpText.text      = $"XP  {state.totalXp:N0}";
             if (_levelText   != null) _levelText.text   = $"LVL  {state.xpLevel}";
             if (_fameText    != null) _fameText.text    = $"FAME  {state.fame:N0}";
-            if (_prestigeText != null) _prestigeText.text = $"PRESTIGE  {state.prestige:N0}";
+            if (_prestigeText != null) _prestigeText.text = $"PRESTIGE  {state.prestigeBalance:N0}";
         }
 
         void SetDashes()
