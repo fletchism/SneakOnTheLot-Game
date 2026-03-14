@@ -408,7 +408,7 @@ namespace SOTL.Player
             // ── Position camera directly in front of player ──
             // Use world directions so we don't depend on player's current facing
             var toCamera = player.transform.forward; // current forward before we change it
-            var camPos = playerPos + toCamera * 3.0f + Vector3.up * 1.0f;
+            var camPos = playerPos + toCamera * 2.2f + Vector3.up * 1.0f;
             cam.transform.position = camPos;
 
             // ── Face player toward camera ──
