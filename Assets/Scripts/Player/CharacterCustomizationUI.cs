@@ -9,10 +9,8 @@ using UnityEngine.UI;
 namespace SOTL.Player
 {
     /// <summary>
-    /// First-launch character creator. Preset-based: Head / Upper Body / Lower Body
-    /// cycling + body shape preset. On confirm, saves to Wix and applies via LocalCharacterSync.
-    ///
-    /// UI elements built at runtime — no prefab needed.
+    /// Character creator UI. Left panel with controls, character visible on right.
+    /// Preset cycling for Head/Outfit, real sliders for body shape.
     /// </summary>
     public class CharacterCustomizationUI : MonoBehaviour
     {
@@ -20,14 +18,19 @@ namespace SOTL.Player
         private bool _isOpen;
         private bool _initialized;
 
+        // Presets
         private List<SidekickPartPreset> _headPresets;
         private List<SidekickPartPreset> _upperPresets;
         private List<SidekickPartPreset> _lowerPresets;
-        private List<SidekickBodyShapePreset> _bodyPresets;
 
-        private int _headIndex, _upperIndex, _lowerIndex, _bodyIndex;
+        private int _headIndex, _upperIndex, _lowerIndex;
         private bool _isFeminine;
-        private Text _headLabel, _upperLabel, _lowerLabel, _bodyLabel, _genderLabel;
+        private Text _headLabel, _upperLabel, _lowerLabel;
+
+        // Sliders
+        private Slider _bodyTypeSlider;   // 0=Masculine, 100=Feminine
+        private Slider _bodySizeSlider;   // -100=Slim, +100=Heavy
+        private Slider _muscleSlider;     // 0=Lean, 100=Muscular
 
         public bool IsOpen => _isOpen;
 
@@ -59,22 +62,18 @@ namespace SOTL.Player
         {
             if (!_isOpen && UnityEngine.InputSystem.Keyboard.current != null &&
                 UnityEngine.InputSystem.Keyboard.current.cKey.wasPressedThisFrame)
-            {
                 Show();
-            }
         }
 
         bool EnsureInit()
         {
             if (_initialized) return true;
-
             var mgr = SidekickCharacterManager.Instance;
             if (mgr == null || !mgr.IsReady) return false;
 
             _headPresets  = mgr.GetPresetsForGroup(PartGroup.Head);
             _upperPresets = mgr.GetPresetsForGroup(PartGroup.UpperBody);
             _lowerPresets = mgr.GetPresetsForGroup(PartGroup.LowerBody);
-            _bodyPresets  = mgr.GetBodyShapePresets();
 
             if (_headPresets.Count == 0 || _upperPresets.Count == 0 || _lowerPresets.Count == 0)
             {
@@ -85,183 +84,335 @@ namespace SOTL.Player
             _headIndex  = Random.Range(0, _headPresets.Count);
             _upperIndex = Random.Range(0, _upperPresets.Count);
             _lowerIndex = Random.Range(0, _lowerPresets.Count);
-            _bodyIndex  = _bodyPresets.Count > 0 ? Random.Range(0, _bodyPresets.Count) : 0;
 
             BuildUI();
             _initialized = true;
             return true;
         }
 
-        // ── UI Construction ───────────────────────────────────────────────
+        // ═══════════════════════════════════════════════════════════════════
+        // UI CONSTRUCTION
+        // ═══════════════════════════════════════════════════════════════════
 
         void BuildUI()
         {
             _canvas.renderMode = RenderMode.ScreenSpaceOverlay;
             _canvas.sortingOrder = 100;
 
-            var scaler = gameObject.GetComponent<CanvasScaler>();
-            if (scaler == null) scaler = gameObject.AddComponent<CanvasScaler>();
+            var scaler = gameObject.GetComponent<CanvasScaler>() ?? gameObject.AddComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = new Vector2(1920, 1080);
 
             if (gameObject.GetComponent<GraphicRaycaster>() == null)
                 gameObject.AddComponent<GraphicRaycaster>();
 
-            // ── Full-screen dark overlay ──
-            var bg = MakeFullRect("Background", transform);
-            var bgImg = bg.gameObject.AddComponent<Image>();
-            bgImg.color = new Color(0f, 0f, 0f, 0.85f);
-            bgImg.raycastTarget = true;
+            // ── Left panel background (covers ~50% of screen) ──
+            var panelGO = new GameObject("LeftPanel", typeof(RectTransform));
+            panelGO.transform.SetParent(transform, false);
+            var panelRT = panelGO.GetComponent<RectTransform>();
+            panelRT.anchorMin = new Vector2(0f, 0f);
+            panelRT.anchorMax = new Vector2(0.48f, 1f);
+            panelRT.offsetMin = panelRT.offsetMax = Vector2.zero;
+            var panelImg = panelGO.AddComponent<Image>();
+            panelImg.color = new Color(0.08f, 0.07f, 0.1f, 0.92f);
+            panelImg.raycastTarget = true; // block clicks from hitting game
 
-            // ── Right panel ──
-            var panel = new GameObject("Panel", typeof(RectTransform)).GetComponent<RectTransform>();
-            panel.SetParent(bg.transform, false);
-            panel.anchorMin = new Vector2(0.55f, 0.05f);
-            panel.anchorMax = new Vector2(0.95f, 0.95f);
-            panel.offsetMin = panel.offsetMax = Vector2.zero;
-            var panelImg = panel.gameObject.AddComponent<Image>();
-            panelImg.color = new Color(0.12f, 0.12f, 0.15f, 0.95f);
-            panelImg.raycastTarget = false;
-
-            // ── Vertical layout via fixed positions ──
-            float y = -30f;
-
-            // Title
-            MakeText(panel, "CREATE YOUR CHARACTER", 28, y, 40f);
+            // ── Title ──
+            float y = -50f;
+            var title = MakeText(panelRT, "CREATE YOUR CHARACTER", 30, FontStyle.Bold);
+            SetTopAnchored(title.rectTransform, 0.05f, 0.95f, y, 45f);
             y -= 70f;
 
-            // Gender toggle
-            _genderLabel = MakePresetRow(panel, "STYLE", y, OnGenderPrev, OnGenderNext);
-            y -= 90f;
+            // ── Preset sections ──
+            y = BuildPresetSection(panelRT, "STYLE", y, OnGenderPrev, OnGenderNext, out var genderLabel);
+            _headLabel = genderLabel; // reuse variable — we'll set it below
+            // Actually, need separate label for gender
+            var _genderLabel = genderLabel;
 
-            // Preset rows
-            _headLabel  = MakePresetRow(panel, "HEAD", y, OnHeadPrev, OnHeadNext);
-            y -= 90f;
-            _upperLabel = MakePresetRow(panel, "OUTFIT TOP", y, OnUpperPrev, OnUpperNext);
-            y -= 90f;
-            _lowerLabel = MakePresetRow(panel, "OUTFIT BOTTOM", y, OnLowerPrev, OnLowerNext);
-            y -= 90f;
+            y = BuildPresetSection(panelRT, "HEAD", y, OnHeadPrev, OnHeadNext, out _headLabel);
+            y = BuildPresetSection(panelRT, "OUTFIT TOP", y, OnUpperPrev, OnUpperNext, out _upperLabel);
+            y = BuildPresetSection(panelRT, "OUTFIT BOTTOM", y, OnLowerPrev, OnLowerNext, out _lowerLabel);
 
-            if (_bodyPresets.Count > 0)
-            {
-                _bodyLabel = MakePresetRow(panel, "BODY SHAPE", y, OnBodyPrev, OnBodyNext);
-                y -= 90f;
-            }
+            y -= 20f;
 
-            // ── Confirm button ──
-            y -= 10f;
-            var confirmRT = MakeRect("ConfirmBtn", panel);
-            confirmRT.anchorMin = new Vector2(0.1f, 1f);
-            confirmRT.anchorMax = new Vector2(0.9f, 1f);
-            confirmRT.pivot = new Vector2(0.5f, 1f);
-            confirmRT.anchoredPosition = new Vector2(0f, y);
-            confirmRT.sizeDelta = new Vector2(0f, 55f);
-            var cImg = confirmRT.gameObject.AddComponent<Image>();
-            cImg.color = new Color(0.2f, 0.6f, 0.3f, 1f);
-            var cBtn = confirmRT.gameObject.AddComponent<Button>();
-            cBtn.targetGraphic = cImg;
-            cBtn.onClick.AddListener(OnConfirm);
-            var cLabel = MakeTextDirect(confirmRT, "CONFIRM", 24);
-            cLabel.alignment = TextAnchor.MiddleCenter;
-            cLabel.raycastTarget = false;
+            // ── Divider ──
+            var divider = new GameObject("Divider", typeof(RectTransform));
+            divider.transform.SetParent(panelRT, false);
+            var divRT = divider.GetComponent<RectTransform>();
+            SetTopAnchored(divRT, 0.08f, 0.92f, y, 1f);
+            var divImg = divider.AddComponent<Image>();
+            divImg.color = new Color(1f, 1f, 1f, 0.15f);
+            divImg.raycastTarget = false;
+            y -= 25f;
+
+            // ── Sliders ──
+            _bodyTypeSlider = BuildSlider(panelRT, "BODY TYPE", "MASCULINE", "FEMININE", 0f, 100f, 0f, ref y);
+            _bodyTypeSlider.onValueChanged.AddListener(_ => OnSliderChanged());
+
+            _bodySizeSlider = BuildSlider(panelRT, "BODY SIZE", "SLIM", "HEAVY", -100f, 100f, 0f, ref y);
+            _bodySizeSlider.onValueChanged.AddListener(_ => OnSliderChanged());
+
+            _muscleSlider = BuildSlider(panelRT, "MUSCULATURE", "LEAN", "MUSCULAR", 0f, 100f, 50f, ref y);
+            _muscleSlider.onValueChanged.AddListener(_ => OnSliderChanged());
+
+            y -= 30f;
+
+            // ── Buttons row ──
+            var btnRow = new GameObject("ButtonRow", typeof(RectTransform));
+            btnRow.transform.SetParent(panelRT, false);
+            var btnRowRT = btnRow.GetComponent<RectTransform>();
+            SetTopAnchored(btnRowRT, 0.08f, 0.92f, y, 50f);
+
+            // Randomize button (left half)
+            var randRT = MakeRect("RandomizeBtn", btnRowRT);
+            randRT.anchorMin = new Vector2(0f, 0f);
+            randRT.anchorMax = new Vector2(0.48f, 1f);
+            randRT.offsetMin = randRT.offsetMax = Vector2.zero;
+            var randImg = randRT.gameObject.AddComponent<Image>();
+            randImg.color = new Color(0.25f, 0.25f, 0.3f, 1f);
+            var randBtn = randRT.gameObject.AddComponent<Button>();
+            randBtn.targetGraphic = randImg;
+            randBtn.onClick.AddListener(OnRandomize);
+            var randLabel = MakeText(randRT, "RANDOMIZE", 18, FontStyle.Normal);
+            FillParent(randLabel.rectTransform);
+            randLabel.alignment = TextAnchor.MiddleCenter;
+            randLabel.raycastTarget = false;
+
+            // Confirm button (right half)
+            var confirmRT = MakeRect("ConfirmBtn", btnRowRT);
+            confirmRT.anchorMin = new Vector2(0.52f, 0f);
+            confirmRT.anchorMax = new Vector2(1f, 1f);
+            confirmRT.offsetMin = confirmRT.offsetMax = Vector2.zero;
+            var confirmImg = confirmRT.gameObject.AddComponent<Image>();
+            confirmImg.color = new Color(0.2f, 0.55f, 0.3f, 1f);
+            var confirmBtn = confirmRT.gameObject.AddComponent<Button>();
+            confirmBtn.targetGraphic = confirmImg;
+            confirmBtn.onClick.AddListener(OnConfirm);
+            var confirmLabel = MakeText(confirmRT, "CONFIRM", 20, FontStyle.Bold);
+            FillParent(confirmLabel.rectTransform);
+            confirmLabel.alignment = TextAnchor.MiddleCenter;
+            confirmLabel.raycastTarget = false;
+
+            // Store gender label properly
+            // We accidentally assigned genderLabel to _headLabel above — fix
+            // Actually the BuildPresetSection out param handles it. Let me re-check.
+            // The _genderLabel local is what we need. Let me wire UpdateLabels properly.
+
+            // Fix: store reference so UpdateLabels can reach it
+            _genderLabelRef = _genderLabel;
 
             UpdateLabels();
         }
 
-        Text MakePresetRow(RectTransform parent, string category, float yPos,
-                           UnityEngine.Events.UnityAction onPrev, UnityEngine.Events.UnityAction onNext)
+        // Internal ref for gender label (built inline)
+        private Text _genderLabelRef;
+
+        // ── Preset section builder ────────────────────────────────────────
+
+        float BuildPresetSection(RectTransform parent, string category, float yPos,
+                                  UnityEngine.Events.UnityAction onPrev, UnityEngine.Events.UnityAction onNext,
+                                  out Text valueLabel)
         {
+            // Category label
+            var catText = MakeText(parent, category, 13, FontStyle.Normal);
+            SetTopAnchored(catText.rectTransform, 0.08f, 0.92f, yPos, 20f);
+            catText.color = new Color(0.55f, 0.55f, 0.6f);
+            catText.raycastTarget = false;
+            yPos -= 22f;
+
             // Row container
             var row = MakeRect("Row_" + category, parent);
-            row.anchorMin = new Vector2(0f, 1f);
-            row.anchorMax = new Vector2(1f, 1f);
-            row.pivot = new Vector2(0.5f, 1f);
-            row.anchoredPosition = new Vector2(0f, yPos);
-            row.sizeDelta = new Vector2(-20f, 75f);
+            SetTopAnchored(row, 0.08f, 0.92f, yPos, 40f);
 
-            // Category label
-            var catText = MakeTextDirect(row, category, 13);
-            catText.rectTransform.anchorMin = new Vector2(0f, 1f);
-            catText.rectTransform.anchorMax = new Vector2(1f, 1f);
-            catText.rectTransform.pivot = new Vector2(0.5f, 1f);
-            catText.rectTransform.anchoredPosition = new Vector2(0f, 0f);
-            catText.rectTransform.sizeDelta = new Vector2(0f, 22f);
-            catText.alignment = TextAnchor.MiddleCenter;
-            catText.color = new Color(0.6f, 0.6f, 0.6f);
-            catText.raycastTarget = false;
-
-            // Bottom row for [<]  label  [>]
-            var btnRow = MakeRect("BtnRow", row);
-            btnRow.anchorMin = new Vector2(0f, 0f);
-            btnRow.anchorMax = new Vector2(1f, 1f);
-            btnRow.offsetMin = new Vector2(0f, 0f);
-            btnRow.offsetMax = new Vector2(0f, -24f);
-
-            // Prev button — anchored left
-            var prevRT = MakeRect("Prev", btnRow);
+            // Prev button
+            var prevRT = MakeRect("Prev", row);
             prevRT.anchorMin = new Vector2(0f, 0f);
             prevRT.anchorMax = new Vector2(0f, 1f);
             prevRT.pivot = new Vector2(0f, 0.5f);
-            prevRT.anchoredPosition = new Vector2(5f, 0f);
-            prevRT.sizeDelta = new Vector2(55f, 0f);
+            prevRT.anchoredPosition = Vector2.zero;
+            prevRT.sizeDelta = new Vector2(45f, 0f);
             var prevImg = prevRT.gameObject.AddComponent<Image>();
-            prevImg.color = new Color(0.3f, 0.3f, 0.35f);
+            prevImg.color = new Color(0.22f, 0.22f, 0.27f, 1f);
             var prevBtn = prevRT.gameObject.AddComponent<Button>();
             prevBtn.targetGraphic = prevImg;
             prevBtn.onClick.AddListener(onPrev);
-            var prevLabel = MakeTextDirect(prevRT, "<", 26);
-            prevLabel.alignment = TextAnchor.MiddleCenter;
-            prevLabel.raycastTarget = false;
+            var pl = MakeText(prevRT, "◀", 18, FontStyle.Normal);
+            FillParent(pl.rectTransform);
+            pl.alignment = TextAnchor.MiddleCenter;
+            pl.raycastTarget = false;
 
-            // Next button — anchored right
-            var nextRT = MakeRect("Next", btnRow);
+            // Next button
+            var nextRT = MakeRect("Next", row);
             nextRT.anchorMin = new Vector2(1f, 0f);
             nextRT.anchorMax = new Vector2(1f, 1f);
             nextRT.pivot = new Vector2(1f, 0.5f);
-            nextRT.anchoredPosition = new Vector2(-5f, 0f);
-            nextRT.sizeDelta = new Vector2(55f, 0f);
+            nextRT.anchoredPosition = Vector2.zero;
+            nextRT.sizeDelta = new Vector2(45f, 0f);
             var nextImg = nextRT.gameObject.AddComponent<Image>();
-            nextImg.color = new Color(0.3f, 0.3f, 0.35f);
+            nextImg.color = new Color(0.22f, 0.22f, 0.27f, 1f);
             var nextBtn = nextRT.gameObject.AddComponent<Button>();
             nextBtn.targetGraphic = nextImg;
             nextBtn.onClick.AddListener(onNext);
-            var nextLabel = MakeTextDirect(nextRT, ">", 26);
-            nextLabel.alignment = TextAnchor.MiddleCenter;
-            nextLabel.raycastTarget = false;
+            var nl = MakeText(nextRT, "▶", 18, FontStyle.Normal);
+            FillParent(nl.rectTransform);
+            nl.alignment = TextAnchor.MiddleCenter;
+            nl.raycastTarget = false;
 
-            // Value label — centered between buttons
-            var valueRT = MakeRect("Value", btnRow);
-            valueRT.anchorMin = new Vector2(0f, 0f);
-            valueRT.anchorMax = new Vector2(1f, 1f);
-            valueRT.offsetMin = new Vector2(65f, 0f);
-            valueRT.offsetMax = new Vector2(-65f, 0f);
-            var valueText = valueRT.gameObject.AddComponent<Text>();
-            valueText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            valueText.fontSize = 20;
-            valueText.color = Color.white;
-            valueText.alignment = TextAnchor.MiddleCenter;
-            valueText.raycastTarget = false;
+            // Value label (centered between buttons)
+            var valRT = MakeRect("Value", row);
+            valRT.anchorMin = new Vector2(0f, 0f);
+            valRT.anchorMax = new Vector2(1f, 1f);
+            valRT.offsetMin = new Vector2(50f, 0f);
+            valRT.offsetMax = new Vector2(-50f, 0f);
+            valueLabel = valRT.gameObject.AddComponent<Text>();
+            valueLabel.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            valueLabel.fontSize = 20;
+            valueLabel.color = Color.white;
+            valueLabel.alignment = TextAnchor.MiddleCenter;
+            valueLabel.raycastTarget = false;
 
-            return valueText;
+            yPos -= 50f;
+            return yPos;
         }
 
-        // ── Cycling ───────────────────────────────────────────────────────
+        // ── Slider builder ────────────────────────────────────────────────
+
+        Slider BuildSlider(RectTransform parent, string label, string leftLabel, string rightLabel,
+                           float min, float max, float defaultVal, ref float yPos)
+        {
+            // Label
+            var catText = MakeText(parent, label, 13, FontStyle.Normal);
+            SetTopAnchored(catText.rectTransform, 0.08f, 0.92f, yPos, 20f);
+            catText.color = new Color(0.55f, 0.55f, 0.6f);
+            catText.raycastTarget = false;
+            yPos -= 24f;
+
+            // Slider container
+            var sliderGO = new GameObject("Slider_" + label, typeof(RectTransform));
+            sliderGO.transform.SetParent(parent, false);
+            var sliderRT = sliderGO.GetComponent<RectTransform>();
+            SetTopAnchored(sliderRT, 0.08f, 0.92f, yPos, 24f);
+
+            // Background bar
+            var bgGO = new GameObject("Background", typeof(RectTransform));
+            bgGO.transform.SetParent(sliderGO.transform, false);
+            var bgRT = bgGO.GetComponent<RectTransform>();
+            FillParent(bgRT);
+            // Thin bar centered vertically
+            bgRT.anchorMin = new Vector2(0f, 0.35f);
+            bgRT.anchorMax = new Vector2(1f, 0.65f);
+            bgRT.offsetMin = bgRT.offsetMax = Vector2.zero;
+            var bgImg = bgGO.AddComponent<Image>();
+            bgImg.color = new Color(0.3f, 0.3f, 0.35f, 1f);
+
+            // Fill area
+            var fillArea = new GameObject("Fill Area", typeof(RectTransform));
+            fillArea.transform.SetParent(sliderGO.transform, false);
+            var fillAreaRT = fillArea.GetComponent<RectTransform>();
+            fillAreaRT.anchorMin = new Vector2(0f, 0.35f);
+            fillAreaRT.anchorMax = new Vector2(1f, 0.65f);
+            fillAreaRT.offsetMin = fillAreaRT.offsetMax = Vector2.zero;
+
+            var fill = new GameObject("Fill", typeof(RectTransform));
+            fill.transform.SetParent(fillArea.transform, false);
+            var fillRT = fill.GetComponent<RectTransform>();
+            FillParent(fillRT);
+            var fillImg = fill.AddComponent<Image>();
+            fillImg.color = new Color(0.5f, 0.5f, 0.55f, 0.6f);
+
+            // Handle
+            var handleArea = new GameObject("Handle Slide Area", typeof(RectTransform));
+            handleArea.transform.SetParent(sliderGO.transform, false);
+            var handleAreaRT = handleArea.GetComponent<RectTransform>();
+            FillParent(handleAreaRT);
+
+            var handle = new GameObject("Handle", typeof(RectTransform));
+            handle.transform.SetParent(handleArea.transform, false);
+            var handleRT = handle.GetComponent<RectTransform>();
+            handleRT.sizeDelta = new Vector2(16f, 28f);
+            var handleImg = handle.AddComponent<Image>();
+            handleImg.color = new Color(0.85f, 0.85f, 0.88f, 1f);
+
+            // Slider component
+            var slider = sliderGO.AddComponent<Slider>();
+            slider.direction = Slider.Direction.LeftToRight;
+            slider.minValue = min;
+            slider.maxValue = max;
+            slider.value = defaultVal;
+            slider.targetGraphic = handleImg;
+            slider.fillRect = fillRT;
+            slider.handleRect = handleRT;
+
+            yPos -= 28f;
+
+            // End labels row
+            var labelsRT = MakeRect("Labels", parent);
+            SetTopAnchored(labelsRT, 0.08f, 0.92f, yPos, 18f);
+
+            var leftText = MakeText(labelsRT, leftLabel, 12, FontStyle.Normal);
+            leftText.rectTransform.anchorMin = new Vector2(0f, 0f);
+            leftText.rectTransform.anchorMax = new Vector2(0.5f, 1f);
+            leftText.rectTransform.offsetMin = leftText.rectTransform.offsetMax = Vector2.zero;
+            leftText.alignment = TextAnchor.MiddleLeft;
+            leftText.color = new Color(0.5f, 0.5f, 0.55f);
+            leftText.raycastTarget = false;
+
+            var rightText = MakeText(labelsRT, rightLabel, 12, FontStyle.Normal);
+            rightText.rectTransform.anchorMin = new Vector2(0.5f, 0f);
+            rightText.rectTransform.anchorMax = new Vector2(1f, 1f);
+            rightText.rectTransform.offsetMin = rightText.rectTransform.offsetMax = Vector2.zero;
+            rightText.alignment = TextAnchor.MiddleRight;
+            rightText.color = new Color(0.5f, 0.5f, 0.55f);
+            rightText.raycastTarget = false;
+
+            yPos -= 35f;
+            return slider;
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // CALLBACKS
+        // ═══════════════════════════════════════════════════════════════════
 
         void OnGenderPrev() { _isFeminine = !_isFeminine; UpdateLabels(); ApplyLivePreview(); }
         void OnGenderNext() { _isFeminine = !_isFeminine; UpdateLabels(); ApplyLivePreview(); }
+        void OnHeadPrev()   { _headIndex  = Wrap(_headIndex  - 1, _headPresets.Count);  UpdateLabels(); ApplyLivePreview(); }
+        void OnHeadNext()   { _headIndex  = Wrap(_headIndex  + 1, _headPresets.Count);  UpdateLabels(); ApplyLivePreview(); }
+        void OnUpperPrev()  { _upperIndex = Wrap(_upperIndex - 1, _upperPresets.Count); UpdateLabels(); ApplyLivePreview(); }
+        void OnUpperNext()  { _upperIndex = Wrap(_upperIndex + 1, _upperPresets.Count); UpdateLabels(); ApplyLivePreview(); }
+        void OnLowerPrev()  { _lowerIndex = Wrap(_lowerIndex - 1, _lowerPresets.Count); UpdateLabels(); ApplyLivePreview(); }
+        void OnLowerNext()  { _lowerIndex = Wrap(_lowerIndex + 1, _lowerPresets.Count); UpdateLabels(); ApplyLivePreview(); }
 
-        void OnHeadPrev()  { _headIndex  = Wrap(_headIndex  - 1, _headPresets.Count);  UpdateLabels(); ApplyLivePreview(); }
-        void OnHeadNext()  { _headIndex  = Wrap(_headIndex  + 1, _headPresets.Count);  UpdateLabels(); ApplyLivePreview(); }
-        void OnUpperPrev() { _upperIndex = Wrap(_upperIndex - 1, _upperPresets.Count); UpdateLabels(); ApplyLivePreview(); }
-        void OnUpperNext() { _upperIndex = Wrap(_upperIndex + 1, _upperPresets.Count); UpdateLabels(); ApplyLivePreview(); }
-        void OnLowerPrev() { _lowerIndex = Wrap(_lowerIndex - 1, _lowerPresets.Count); UpdateLabels(); ApplyLivePreview(); }
-        void OnLowerNext() { _lowerIndex = Wrap(_lowerIndex + 1, _lowerPresets.Count); UpdateLabels(); ApplyLivePreview(); }
-        void OnBodyPrev()  { _bodyIndex  = Wrap(_bodyIndex  - 1, _bodyPresets.Count);  UpdateLabels(); ApplyLivePreview(); }
-        void OnBodyNext()  { _bodyIndex  = Wrap(_bodyIndex  + 1, _bodyPresets.Count);  UpdateLabels(); ApplyLivePreview(); }
+        void OnSliderChanged() { ApplyLivePreview(); }
+
+        void OnRandomize()
+        {
+            _headIndex  = Random.Range(0, _headPresets.Count);
+            _upperIndex = Random.Range(0, _upperPresets.Count);
+            _lowerIndex = Random.Range(0, _lowerPresets.Count);
+            _isFeminine = Random.value > 0.5f;
+
+            _bodyTypeSlider.value = Random.Range(0f, 100f);
+            _bodySizeSlider.value = Random.Range(-100f, 100f);
+            _muscleSlider.value   = Random.Range(0f, 100f);
+
+            UpdateLabels();
+            ApplyLivePreview();
+        }
 
         int Wrap(int idx, int count) => ((idx % count) + count) % count;
 
-        /// <summary>Rebuild the player character live as presets are cycled.</summary>
+        void UpdateLabels()
+        {
+            if (_genderLabelRef != null) _genderLabelRef.text = _isFeminine ? "Feminine" : "Masculine";
+            if (_headLabel  != null) _headLabel.text  = TrimName(_headPresets[_headIndex].Name);
+            if (_upperLabel != null) _upperLabel.text  = TrimName(_upperPresets[_upperIndex].Name);
+            if (_lowerLabel != null) _lowerLabel.text  = TrimName(_lowerPresets[_lowerIndex].Name);
+        }
+
+        string TrimName(string n) => n.Length > 28 ? n.Substring(0, 25) + "..." : n;
+
+        // ── Live preview ──────────────────────────────────────────────────
+
         void ApplyLivePreview()
         {
             var player = GameObject.FindWithTag("Player");
@@ -271,47 +422,30 @@ namespace SOTL.Player
             sync.ApplyAppearance(BuildAppearanceData());
         }
 
-        void UpdateLabels()
-        {
-            if (_genderLabel != null) _genderLabel.text = _isFeminine ? "Feminine" : "Masculine";
-            if (_headLabel  != null) _headLabel.text  = TrimName(_headPresets[_headIndex].Name);
-            if (_upperLabel != null) _upperLabel.text  = TrimName(_upperPresets[_upperIndex].Name);
-            if (_lowerLabel != null) _lowerLabel.text  = TrimName(_lowerPresets[_lowerIndex].Name);
-            if (_bodyLabel  != null && _bodyPresets.Count > 0) _bodyLabel.text = _bodyPresets[_bodyIndex].Name;
-        }
-
-        string TrimName(string n) => n.Length > 28 ? n.Substring(0, 25) + "..." : n;
-
         // ── Confirm ───────────────────────────────────────────────────────
 
         void OnConfirm()
         {
             var data = BuildAppearanceData();
 
-            // Ensure final appearance is applied (in case no cycling happened)
             var player = GameObject.FindWithTag("Player");
             if (player != null)
             {
                 var sync = player.GetComponent<LocalCharacterSync>();
-                if (sync != null)
-                    sync.ApplyAppearance(data);
+                if (sync != null) sync.ApplyAppearance(data);
             }
 
-            // Save to Wix for persistence across sessions
             var api = SOTLApiManager.Instance;
             if (api != null && api.IsLinked)
             {
-                string json = data.ToJson();
-                api.SaveAvatar(json, ok =>
+                api.SaveAvatar(data.ToJson(), ok =>
                     Debug.Log(ok ? "[SOTL Customize] Avatar saved to Wix." : "[SOTL Customize] Avatar save failed (fail-open)."));
-            }
-            else
-            {
-                Debug.Log("[SOTL Customize] Not linked — avatar not saved to Wix.");
             }
 
             Hide();
         }
+
+        // ── Build appearance data ─────────────────────────────────────────
 
         CharacterAppearanceData BuildAppearanceData()
         {
@@ -323,14 +457,12 @@ namespace SOTL.Player
             foreach (var e in mgr.ResolvePreset(_upperPresets[_upperIndex])) data.SetPart(e.slot, e.name);
             foreach (var e in mgr.ResolvePreset(_lowerPresets[_lowerIndex])) data.SetPart(e.slot, e.name);
 
-            if (_bodyPresets.Count > 0)
-            {
-                var bp = _bodyPresets[_bodyIndex];
-                data.bodyType = bp.BodyType;
-                data.muscles  = bp.Musculature;
-                data.heavy  = bp.BodySize > 0 ? bp.BodySize  : 0;
-                data.skinny = bp.BodySize < 0 ? -bp.BodySize : 0;
-            }
+            data.bodyType = _bodyTypeSlider.value;
+            data.muscles  = _muscleSlider.value;
+
+            float size = _bodySizeSlider.value;
+            data.heavy  = size > 0 ? size  : 0;
+            data.skinny = size < 0 ? -size : 0;
 
             return data;
         }
@@ -346,7 +478,6 @@ namespace SOTL.Player
                 if (ctrl != null) ctrl.enabled = !freeze;
             }
 
-            // Unlock cursor for UI interaction, re-lock when done
             if (freeze)
             {
                 Cursor.visible = true;
@@ -358,23 +489,13 @@ namespace SOTL.Player
                 Cursor.lockState = CursorLockMode.Locked;
             }
 
-            // Disable camera controller so mouse look doesn't fight the UI
             var cam = Object.FindFirstObjectByType<LotCameraController>();
             if (cam != null) cam.enabled = !freeze;
         }
 
-        // ── UI Helpers ────────────────────────────────────────────────────
-
-        static RectTransform MakeFullRect(string name, Transform parent)
-        {
-            var go = new GameObject(name, typeof(RectTransform));
-            go.transform.SetParent(parent, false);
-            var rt = go.GetComponent<RectTransform>();
-            rt.anchorMin = Vector2.zero;
-            rt.anchorMax = Vector2.one;
-            rt.offsetMin = rt.offsetMax = Vector2.zero;
-            return rt;
-        }
+        // ═══════════════════════════════════════════════════════════════════
+        // UI HELPERS
+        // ═══════════════════════════════════════════════════════════════════
 
         static RectTransform MakeRect(string name, RectTransform parent)
         {
@@ -383,32 +504,33 @@ namespace SOTL.Player
             return go.GetComponent<RectTransform>();
         }
 
-        static void MakeText(RectTransform parent, string text, int fontSize, float yPos, float height)
-        {
-            var t = MakeTextDirect(parent, text, fontSize);
-            t.alignment = TextAnchor.MiddleCenter;
-            t.rectTransform.anchorMin = new Vector2(0.05f, 1f);
-            t.rectTransform.anchorMax = new Vector2(0.95f, 1f);
-            t.rectTransform.pivot = new Vector2(0.5f, 1f);
-            t.rectTransform.anchoredPosition = new Vector2(0f, yPos);
-            t.rectTransform.sizeDelta = new Vector2(0f, height);
-            t.raycastTarget = false;
-        }
-
-        static Text MakeTextDirect(RectTransform parent, string text, int fontSize)
+        static Text MakeText(RectTransform parent, string text, int fontSize, FontStyle style)
         {
             var go = new GameObject("Text", typeof(RectTransform));
             go.transform.SetParent(parent, false);
-            var rt = go.GetComponent<RectTransform>();
-            rt.anchorMin = Vector2.zero;
-            rt.anchorMax = Vector2.one;
-            rt.offsetMin = rt.offsetMax = Vector2.zero;
             var t = go.AddComponent<Text>();
             t.text = text;
             t.fontSize = fontSize;
+            t.fontStyle = style;
             t.color = Color.white;
             t.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             return t;
+        }
+
+        static void SetTopAnchored(RectTransform rt, float xMin, float xMax, float yPos, float height)
+        {
+            rt.anchorMin = new Vector2(xMin, 1f);
+            rt.anchorMax = new Vector2(xMax, 1f);
+            rt.pivot = new Vector2(0.5f, 1f);
+            rt.anchoredPosition = new Vector2(0f, yPos);
+            rt.sizeDelta = new Vector2(0f, height);
+        }
+
+        static void FillParent(RectTransform rt)
+        {
+            rt.anchorMin = Vector2.zero;
+            rt.anchorMax = Vector2.one;
+            rt.offsetMin = rt.offsetMax = Vector2.zero;
         }
     }
 }
