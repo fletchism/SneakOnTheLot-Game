@@ -127,10 +127,10 @@ namespace SOTL.Player
             panelGO.transform.SetParent(transform, false);
             var panelRT = panelGO.GetComponent<RectTransform>();
             panelRT.anchorMin = new Vector2(0f, 0f);
-            panelRT.anchorMax = new Vector2(0.48f, 1f);
+            panelRT.anchorMax = new Vector2(0.42f, 1f);
             panelRT.offsetMin = panelRT.offsetMax = Vector2.zero;
             var panelImg = panelGO.AddComponent<Image>();
-            panelImg.color = new Color(0.08f, 0.07f, 0.1f, 0.92f);
+            panelImg.color = new Color(0.08f, 0.07f, 0.1f, 1f);
             panelImg.raycastTarget = true; // block clicks from hitting game
 
             // ── Title ──
@@ -407,12 +407,12 @@ namespace SOTL.Player
                 // Detach from camera rig
                 cam.transform.SetParent(null, true);
 
-                // Position camera in front of player, slightly above, looking at chest
+                // Position camera in front of player, at chest height, looking at center mass
                 var playerPos = player.transform.position;
-                var lookTarget = playerPos + Vector3.up * 1.0f;
-                var camPos = playerPos + Vector3.up * 1.1f + player.transform.forward * 2.8f;
-                // Offset to the right so character is on the right side of screen
-                camPos += player.transform.right * 0.6f;
+                var lookTarget = playerPos + Vector3.up * 0.95f;
+                // Place camera forward of the player, offset right so char appears right of center
+                var camPos = playerPos + Vector3.up * 1.0f + player.transform.forward * 2.4f;
+                camPos += player.transform.right * 0.3f;
 
                 cam.transform.position = camPos;
                 cam.transform.LookAt(lookTarget);
@@ -422,20 +422,28 @@ namespace SOTL.Player
                 _charRotation = player.transform.eulerAngles.y;
             }
 
-            // ── Backdrop: dark cylinder behind the player ──
-            _backdrop = GameObject.CreatePrimitive(PrimitiveType.Quad);
-            _backdrop.name = "CreationBackdrop";
-            var bdRenderer = _backdrop.GetComponent<Renderer>();
-            bdRenderer.material = new Material(Shader.Find("Unlit/Color"));
-            bdRenderer.material.color = new Color(0.06f, 0.05f, 0.08f, 1f);
-            // Remove collider
-            var col = _backdrop.GetComponent<Collider>();
-            if (col != null) Object.Destroy(col);
-            // Position behind the player, large enough to fill background
-            var pPos = player.transform.position;
-            _backdrop.transform.position = pPos + Vector3.up * 2f - player.transform.forward * 1.5f;
-            _backdrop.transform.localScale = new Vector3(8f, 6f, 1f);
-            _backdrop.transform.LookAt(pPos + Vector3.up * 2f + player.transform.forward * 10f);
+            // ── Backdrop: UI overlay covering right side behind character ──
+            // Use a screen-space canvas so it always fills properly
+            var bdCanvasGO = new GameObject("CreationBackdropCanvas");
+            var bdCanvas = bdCanvasGO.AddComponent<Canvas>();
+            bdCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            bdCanvas.sortingOrder = 99; // Below our UI (100) but above everything else
+            var bdScaler = bdCanvasGO.AddComponent<CanvasScaler>();
+            bdScaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            bdScaler.referenceResolution = new Vector2(1920, 1080);
+
+            // Right-side dark panel
+            var bdPanel = new GameObject("BackdropPanel", typeof(RectTransform));
+            bdPanel.transform.SetParent(bdCanvasGO.transform, false);
+            var bdRT = bdPanel.GetComponent<RectTransform>();
+            bdRT.anchorMin = new Vector2(0.42f, 0f);
+            bdRT.anchorMax = Vector2.one;
+            bdRT.offsetMin = bdRT.offsetMax = Vector2.zero;
+            var bdImg = bdPanel.AddComponent<Image>();
+            bdImg.color = new Color(0.06f, 0.05f, 0.08f, 1f);
+            bdImg.raycastTarget = false;
+
+            _backdrop = bdCanvasGO;
 
             // ── Spotlight on the character ──
             _spotlight = new GameObject("CreationSpotlight");
@@ -513,11 +521,11 @@ namespace SOTL.Player
 
         void SetCanvasesVisible(bool visible)
         {
-            // Hide/show all canvases except this one
-            var names = new[] { "StatsCanvas", "HUD", "DialogueCanvas" };
-            foreach (var name in names)
+            // Hide/show all canvases except this one and LinkOverlay
+            var names = new[] { "StatsCanvas", "HUD_MilitaryCombat_LooterShooter", "DialogueCanvas" };
+            foreach (var n in names)
             {
-                var go = GameObject.Find(name);
+                var go = GameObject.Find(n);
                 if (go != null) go.SetActive(visible);
             }
         }
