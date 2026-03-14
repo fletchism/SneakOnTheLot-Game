@@ -416,7 +416,7 @@ namespace SOTL.Player
             _charRotation = player.transform.eulerAngles.y;
 
             // ── Camera looks left of player so character appears on right of screen ──
-            var lookTarget = playerPos + Vector3.up * 0.95f + player.transform.right * 0.4f;
+            var lookTarget = playerPos + Vector3.up * 0.95f + player.transform.right * -0.25f;
             cam.transform.LookAt(lookTarget);
 
             // ── Backdrop: 3D quad behind the player ──
