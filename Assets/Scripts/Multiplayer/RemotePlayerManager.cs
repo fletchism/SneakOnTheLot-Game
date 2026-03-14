@@ -10,7 +10,7 @@ namespace SOTL.Multiplayer
     /// Phase 2: spawns/rebuilds from avatar properties.
     /// Phase 3: receives position events, interpolates movement, drives animator.
     /// </summary>
-    public class RemotePlayerManager : MonoBehaviour, IInRoomCallbacks, IOnEventCallback
+    public class RemotePlayerManager : MonoBehaviour, IInRoomCallbacks, IOnEventCallback, IMatchmakingCallbacks
     {
         public static RemotePlayerManager Instance { get; private set; }
 
@@ -85,8 +85,7 @@ namespace SOTL.Multiplayer
 
             net.RegisterCallbacks(this);
             _registered = true;
-            Debug.Log("[SOTL Remote] Registered for Photon callbacks (in-room + events).");
-            ProcessExistingPlayers();
+            Debug.Log("[SOTL Remote] Registered for Photon callbacks.");
         }
 
         // ── Process existing players on late join ─────────────────────────
@@ -94,19 +93,25 @@ namespace SOTL.Multiplayer
         void ProcessExistingPlayers()
         {
             var net = LotNetworkManager.Instance;
-            if (net == null || !net.IsInRoom) return;
+            if (net == null || !net.IsInRoom) { Debug.Log("[SOTL Remote] ProcessExisting: not in room yet."); return; }
 
             var players = net.GetRoomPlayers();
-            if (players == null) return;
+            if (players == null) { Debug.Log("[SOTL Remote] ProcessExisting: no player list."); return; }
 
+            int remoteCount = 0;
             foreach (var kvp in players)
             {
                 var player = kvp.Value;
                 if (player.IsLocal) continue;
+                remoteCount++;
+
+                Debug.Log($"[SOTL Remote] Found remote player {player.ActorNumber}, has avatar: {player.CustomProperties.ContainsKey(CharacterAppearanceData.PhotonKey)}");
 
                 if (player.CustomProperties.TryGetValue(CharacterAppearanceData.PhotonKey, out var avatarJson))
                     SpawnOrRebuild(player.ActorNumber, avatarJson as string);
             }
+
+            Debug.Log($"[SOTL Remote] ProcessExisting done. {remoteCount} remote player(s) found.");
         }
 
         // ── IInRoomCallbacks ──────────────────────────────────────────────
@@ -131,6 +136,21 @@ namespace SOTL.Multiplayer
         }
 
         public void OnRoomPropertiesUpdate(PhotonHashtable propertiesThatChanged) { }
+
+        // ── IMatchmakingCallbacks ─────────────────────────────────────────
+
+        public void OnJoinedRoom()
+        {
+            Debug.Log("[SOTL Remote] Joined room — scanning for existing players.");
+            ProcessExistingPlayers();
+        }
+
+        public void OnCreatedRoom() { }
+        public void OnCreateRoomFailed(short code, string message) { }
+        public void OnJoinRoomFailed(short code, string message) { }
+        public void OnJoinRandomFailed(short code, string message) { }
+        public void OnLeftRoom() { }
+        public void OnFriendListUpdate(System.Collections.Generic.List<FriendInfo> friendList) { }
         public void OnMasterClientSwitched(Player newMasterClient) { }
 
         // ── IOnEventCallback ──────────────────────────────────────────────
