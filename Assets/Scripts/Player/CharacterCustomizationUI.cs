@@ -412,7 +412,7 @@ namespace SOTL.Player
                 var lookTarget = playerPos + Vector3.up * 0.95f;
                 // Place camera forward of the player, offset right so char appears right of center
                 var camPos = playerPos + Vector3.up * 1.0f + player.transform.forward * 2.4f;
-                camPos += player.transform.right * 0.3f;
+                camPos += player.transform.right * 1.2f;
 
                 cam.transform.position = camPos;
                 cam.transform.LookAt(lookTarget);
