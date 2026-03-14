@@ -454,8 +454,8 @@ namespace SOTL.Player
             light.range = 10f;
             light.spotAngle = 50f;
             light.shadows = LightShadows.Soft;
-            _spotlight.transform.position = pPos + Vector3.up * 3.5f + player.transform.forward * 1.5f;
-            _spotlight.transform.LookAt(pPos + Vector3.up * 0.8f);
+            _spotlight.transform.position = player.transform.position + Vector3.up * 3.5f + player.transform.forward * 1.5f;
+            _spotlight.transform.LookAt(player.transform.position + Vector3.up * 0.8f);
 
             // ── Hide HUD and other overlays ──
             SetCanvasesVisible(false);
