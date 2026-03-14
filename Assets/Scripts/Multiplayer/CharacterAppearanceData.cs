@@ -33,6 +33,9 @@ namespace SOTL.Multiplayer
         /// <summary>Muscle blend (0–100, maps to SidekickRuntime.MusclesBlendValue).</summary>
         public float muscles = 50f;
 
+        /// <summary>True = feminine animator (AC_Sidekick_Feminine). False = masculine (default).</summary>
+        public bool isFeminine;
+
         // ── Serialization ────────────────────────────────────────────────
 
         public string ToJson() => JsonUtility.ToJson(this);

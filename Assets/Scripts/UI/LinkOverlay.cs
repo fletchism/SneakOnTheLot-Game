@@ -27,21 +27,23 @@ namespace SOTL.UI
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible   = true;
 
-            // Disable player controller so keyboard goes to input field
-            var player = GameObject.FindWithTag("Player");
-            if (player != null)
-            {
-                var ctrl = player.GetComponent<UnityEngine.MonoBehaviour>();
-                // Disable all MonoBehaviours on Player except essential ones
-                foreach (var mb in player.GetComponents<UnityEngine.MonoBehaviour>())
-                {
-                    if (mb.GetType().Name == "LotPlayerController")
-                        mb.enabled = false;
-                }
-            }
+            // Disable player + camera so input goes to the overlay
+            FreezeGame(true);
 
             if (_linkButton != null)
                 _linkButton.onClick.AddListener(OnLinkPressed);
+
+            // Wire skip button if it exists
+            var skipBtn = GetComponentInChildren<Button>(true);
+            // Find the skip button by searching children (it's not the link button)
+            foreach (var btn in GetComponentsInChildren<Button>(true))
+            {
+                if (btn != _linkButton)
+                {
+                    btn.onClick.AddListener(Dismiss);
+                    break;
+                }
+            }
 
             SetStatus("Enter your link code from sneakonthelot.com/my-stats", Color.white);
         }
@@ -75,20 +77,30 @@ namespace SOTL.UI
 
         void Dismiss()
         {
-            // Re-enable player controller
-            var player = GameObject.FindWithTag("Player");
-            if (player != null)
-            {
-                foreach (var mb in player.GetComponents<UnityEngine.MonoBehaviour>())
-                {
-                    if (mb.GetType().Name == "LotPlayerController")
-                        mb.enabled = true;
-                }
-            }
-
+            FreezeGame(false);
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible   = false;
             gameObject.SetActive(false);
+        }
+
+        void FreezeGame(bool freeze)
+        {
+            var player = GameObject.FindWithTag("Player");
+            if (player != null)
+            {
+                foreach (var mb in player.GetComponents<MonoBehaviour>())
+                {
+                    var name = mb.GetType().Name;
+                    if (name == "LotPlayerController" || name == "LotCameraController")
+                        mb.enabled = !freeze;
+                }
+            }
+            // Also check camera rig for camera controller
+            foreach (var mb in Object.FindObjectsByType<MonoBehaviour>(FindObjectsSortMode.None))
+            {
+                if (mb.GetType().Name == "LotCameraController")
+                    mb.enabled = !freeze;
+            }
         }
 
         void SetStatus(string msg, Color color)

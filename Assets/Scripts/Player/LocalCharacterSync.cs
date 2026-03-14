@@ -218,6 +218,11 @@ namespace SOTL.Player
             var newAnimator = newChar.GetComponentInChildren<Animator>();
             if (newAnimator != null)
             {
+                // Swap to correct gendered animator controller
+                var correctController = mgr.GetAnimatorController(_currentAppearance.isFeminine);
+                if (correctController != null)
+                    newAnimator.runtimeAnimatorController = correctController;
+
                 // Force grounded state so the animator doesn't enter falling
                 newAnimator.SetBool("IsGrounded", true);
                 newAnimator.SetBool("IsStopped", true);

@@ -23,8 +23,11 @@ namespace SOTL.Multiplayer
         public static SidekickCharacterManager Instance { get; private set; }
 
         [Header("Animation")]
-        [Tooltip("Animator controller to apply to built characters. Leave null to skip.")]
+        [Tooltip("Masculine animator controller (default).")]
         [SerializeField] private RuntimeAnimatorController _animatorController;
+
+        [Tooltip("Feminine animator controller.")]
+        [SerializeField] private RuntimeAnimatorController _feminineAnimatorController;
 
         private DatabaseManager _dbManager;
         private SidekickRuntime _runtime;
@@ -213,5 +216,9 @@ namespace SOTL.Multiplayer
 
         /// <summary>Exposes the DatabaseManager for advanced queries (presets, colors, etc).</summary>
         public DatabaseManager DB => _dbManager;
+
+        /// <summary>Get the appropriate animator controller for gender.</summary>
+        public RuntimeAnimatorController GetAnimatorController(bool isFeminine)
+            => isFeminine && _feminineAnimatorController != null ? _feminineAnimatorController : _animatorController;
     }
 }

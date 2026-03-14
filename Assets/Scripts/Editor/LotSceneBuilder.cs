@@ -17,6 +17,7 @@ namespace SOTL.Editor
         const string CHAR_PREFAB  = "Assets/Synty/SidekickCharacters/Characters/HumanSpecies/HumanSpecies_01/HumanSpecies_01.prefab";
         // Locomotion controller — confirmed present in project
         const string PLAYER_ANIM  = "Assets/Synty/AnimationBaseLocomotion/Animations/Sidekick/AC_Sidekick_Masculine.controller";
+        const string PLAYER_ANIM_F = "Assets/Synty/AnimationBaseLocomotion/Animations/Sidekick/AC_Sidekick_Feminine.controller";
         // NPC
         const string NPC_PREFAB   = "Assets/Synty/SidekickCharacters/Characters/ModernCivilians/ModernCivilian_01/ModernCivilian_01.prefab";
         const string IDLE_CTRL    = "Assets/Animations/NPC/AC_NPC_Idle_Masculine.controller";
@@ -577,12 +578,14 @@ namespace SOTL.Editor
             var skipRT = skipGO.GetComponent<RectTransform>();
             skipRT.anchorMin = skipRT.anchorMax = new Vector2(0.5f, 1f);
             skipRT.pivot = new Vector2(0.5f, 1f);
-            skipRT.sizeDelta = new Vector2(160f, 36f);
+            skipRT.sizeDelta = new Vector2(200f, 40f);
             skipRT.anchoredPosition = new Vector2(0, -290);
+            var skipImg = skipGO.AddComponent<UnityEngine.UI.Image>();
+            skipImg.color = new Color(0.3f, 0.3f, 0.3f, 0.8f);
             var skipBtn = skipGO.AddComponent<UnityEngine.UI.Button>();
+            skipBtn.targetGraphic = skipImg;
             var skipLabel = CreateLabel(skipGO.transform, "SkipLabel", "Play without linking", Vector2.zero);
-            skipLabel.fontSize = 16; skipLabel.color = new Color(0.6f, 0.6f, 0.6f);
-            skipBtn.onClick.AddListener(() => canvasGO.SetActive(false));
+            skipLabel.fontSize = 16; skipLabel.color = new Color(0.8f, 0.8f, 0.8f);
 
             var overlayType = System.Type.GetType("SOTL.UI.LinkOverlay, SOTL.UI");
             if (overlayType != null)
@@ -673,14 +676,15 @@ namespace SOTL.Editor
             if (skMgrType != null)
             {
                 var skMgr = skMgrGO.AddComponent(skMgrType);
-                // Wire the locomotion controller so built characters get animation
+                // Wire the locomotion controllers so built characters get animation
                 var animCtrl = AssetDatabase.LoadAssetAtPath<RuntimeAnimatorController>(PLAYER_ANIM);
+                var animCtrlF = AssetDatabase.LoadAssetAtPath<RuntimeAnimatorController>(PLAYER_ANIM_F);
+                var skSO = new SerializedObject(skMgr);
                 if (animCtrl != null)
-                {
-                    var skSO = new SerializedObject(skMgr);
                     skSO.FindProperty("_animatorController").objectReferenceValue = animCtrl;
-                    skSO.ApplyModifiedPropertiesWithoutUndo();
-                }
+                if (animCtrlF != null)
+                    skSO.FindProperty("_feminineAnimatorController").objectReferenceValue = animCtrlF;
+                skSO.ApplyModifiedPropertiesWithoutUndo();
             }
             else
                 Debug.LogWarning("[SOTL Scene] SidekickCharacterManager type not found — compile first.");

@@ -53,8 +53,14 @@ namespace SOTL.Player
 
             if (_hideCursor)
             {
-                Cursor.visible   = false;
-                Cursor.lockState = CursorLockMode.Locked;
+                // Don't lock cursor if a UI overlay is active (LinkOverlay, CustomizationUI)
+                var linkOverlay = Object.FindFirstObjectByType<SOTL.UI.LinkOverlay>();
+                bool overlayActive = linkOverlay != null && linkOverlay.gameObject.activeSelf;
+                if (!overlayActive)
+                {
+                    Cursor.visible   = false;
+                    Cursor.lockState = CursorLockMode.Locked;
+                }
             }
 
             transform.position = _playerTarget.position;

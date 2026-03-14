@@ -253,10 +253,14 @@ namespace SOTL.Multiplayer
                 return;
             }
 
-            // Set initial grounded state on animator
+            // Set correct gendered animator + initial grounded state
             var animator = character.GetComponentInChildren<Animator>();
             if (animator != null)
             {
+                var correctController = mgr.GetAnimatorController(data.isFeminine);
+                if (correctController != null)
+                    animator.runtimeAnimatorController = correctController;
+
                 animator.SetBool(IsGroundedHash, true);
                 animator.SetBool(IsStoppedHash, true);
                 animator.SetFloat(MoveSpeedHash, 0f);

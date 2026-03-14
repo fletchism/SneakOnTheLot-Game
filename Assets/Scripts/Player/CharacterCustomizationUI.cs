@@ -26,7 +26,8 @@ namespace SOTL.Player
         private List<SidekickBodyShapePreset> _bodyPresets;
 
         private int _headIndex, _upperIndex, _lowerIndex, _bodyIndex;
-        private Text _headLabel, _upperLabel, _lowerLabel, _bodyLabel;
+        private bool _isFeminine;
+        private Text _headLabel, _upperLabel, _lowerLabel, _bodyLabel, _genderLabel;
 
         public bool IsOpen => _isOpen;
 
@@ -128,6 +129,10 @@ namespace SOTL.Player
             // Title
             MakeText(panel, "CREATE YOUR CHARACTER", 28, y, 40f);
             y -= 70f;
+
+            // Gender toggle
+            _genderLabel = MakePresetRow(panel, "STYLE", y, OnGenderPrev, OnGenderNext);
+            y -= 90f;
 
             // Preset rows
             _headLabel  = MakePresetRow(panel, "HEAD", y, OnHeadPrev, OnHeadNext);
@@ -242,6 +247,9 @@ namespace SOTL.Player
 
         // ── Cycling ───────────────────────────────────────────────────────
 
+        void OnGenderPrev() { _isFeminine = !_isFeminine; UpdateLabels(); ApplyLivePreview(); }
+        void OnGenderNext() { _isFeminine = !_isFeminine; UpdateLabels(); ApplyLivePreview(); }
+
         void OnHeadPrev()  { _headIndex  = Wrap(_headIndex  - 1, _headPresets.Count);  UpdateLabels(); ApplyLivePreview(); }
         void OnHeadNext()  { _headIndex  = Wrap(_headIndex  + 1, _headPresets.Count);  UpdateLabels(); ApplyLivePreview(); }
         void OnUpperPrev() { _upperIndex = Wrap(_upperIndex - 1, _upperPresets.Count); UpdateLabels(); ApplyLivePreview(); }
@@ -265,6 +273,7 @@ namespace SOTL.Player
 
         void UpdateLabels()
         {
+            if (_genderLabel != null) _genderLabel.text = _isFeminine ? "Feminine" : "Masculine";
             if (_headLabel  != null) _headLabel.text  = TrimName(_headPresets[_headIndex].Name);
             if (_upperLabel != null) _upperLabel.text  = TrimName(_upperPresets[_upperIndex].Name);
             if (_lowerLabel != null) _lowerLabel.text  = TrimName(_lowerPresets[_lowerIndex].Name);
@@ -308,6 +317,7 @@ namespace SOTL.Player
         {
             var mgr = SidekickCharacterManager.Instance;
             var data = new CharacterAppearanceData();
+            data.isFeminine = _isFeminine;
 
             foreach (var e in mgr.ResolvePreset(_headPresets[_headIndex]))   data.SetPart(e.slot, e.name);
             foreach (var e in mgr.ResolvePreset(_upperPresets[_upperIndex])) data.SetPart(e.slot, e.name);
