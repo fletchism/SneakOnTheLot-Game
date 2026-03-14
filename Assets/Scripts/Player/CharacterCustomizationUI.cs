@@ -407,14 +407,14 @@ namespace SOTL.Player
                 // Detach from camera rig
                 cam.transform.SetParent(null, true);
 
-                // Position camera in front of player, at chest height, looking at center mass
+                // Position camera in front of player, at chest height
                 var playerPos = player.transform.position;
-                var lookTarget = playerPos + Vector3.up * 0.95f;
-                // Place camera forward of the player, offset right so char appears right of center
-                var camPos = playerPos + Vector3.up * 1.0f + player.transform.forward * 2.4f;
-                camPos += player.transform.right * 1.2f;
+                var camPos = playerPos + Vector3.up * 1.0f + player.transform.forward * 2.8f;
 
                 cam.transform.position = camPos;
+
+                // Look slightly LEFT of player so character appears on the right side of screen
+                var lookTarget = playerPos + Vector3.up * 0.95f - player.transform.right * 0.8f;
                 cam.transform.LookAt(lookTarget);
 
                 // Face the player toward the camera
