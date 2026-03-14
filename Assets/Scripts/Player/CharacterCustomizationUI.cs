@@ -32,6 +32,17 @@ namespace SOTL.Player
         private Slider _bodySizeSlider;   // -100=Slim, +100=Heavy
         private Slider _muscleSlider;     // 0=Lean, 100=Muscular
 
+        // Camera/Lighting for character creation mode
+        private Transform _camOrigParent;
+        private Vector3 _camOrigLocalPos;
+        private Quaternion _camOrigLocalRot;
+        private GameObject _backdrop;
+        private GameObject _spotlight;
+        private float _charRotation;
+        private float _playerOrigRotY;
+        private bool _isDragging;
+        private float _dragStartX;
+
         public bool IsOpen => _isOpen;
 
         public void Show()
@@ -40,11 +51,13 @@ namespace SOTL.Player
             _canvas.enabled = true;
             _isOpen = true;
             FreezePlayerInput(true);
+            EnterCreationMode();
             Debug.Log("[SOTL Customize] Opened.");
         }
 
         public void Hide()
         {
+            ExitCreationMode();
             _canvas.enabled = false;
             _isOpen = false;
             FreezePlayerInput(false);
@@ -63,6 +76,9 @@ namespace SOTL.Player
             if (!_isOpen && UnityEngine.InputSystem.Keyboard.current != null &&
                 UnityEngine.InputSystem.Keyboard.current.cKey.wasPressedThisFrame)
                 Show();
+
+            if (_isOpen)
+                HandleCharacterRotation();
         }
 
         bool EnsureInit()
@@ -367,6 +383,143 @@ namespace SOTL.Player
 
             yPos -= 35f;
             return slider;
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // CHARACTER CREATION MODE (camera, lighting, rotation)
+        // ═══════════════════════════════════════════════════════════════════
+
+        void EnterCreationMode()
+        {
+            var player = GameObject.FindWithTag("Player");
+            if (player == null) return;
+
+            _playerOrigRotY = player.transform.eulerAngles.y;
+
+            // ── Camera: detach from rig, position in front of player ──
+            var cam = Camera.main;
+            if (cam != null)
+            {
+                _camOrigParent   = cam.transform.parent;
+                _camOrigLocalPos = cam.transform.localPosition;
+                _camOrigLocalRot = cam.transform.localRotation;
+
+                // Detach from camera rig
+                cam.transform.SetParent(null, true);
+
+                // Position camera in front of player, slightly above, looking at chest
+                var playerPos = player.transform.position;
+                var lookTarget = playerPos + Vector3.up * 1.0f;
+                var camPos = playerPos + Vector3.up * 1.1f + player.transform.forward * 2.8f;
+                // Offset to the right so character is on the right side of screen
+                camPos += player.transform.right * 0.6f;
+
+                cam.transform.position = camPos;
+                cam.transform.LookAt(lookTarget);
+
+                // Face the player toward the camera
+                player.transform.LookAt(new Vector3(camPos.x, playerPos.y, camPos.z));
+                _charRotation = player.transform.eulerAngles.y;
+            }
+
+            // ── Backdrop: dark cylinder behind the player ──
+            _backdrop = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            _backdrop.name = "CreationBackdrop";
+            var bdRenderer = _backdrop.GetComponent<Renderer>();
+            bdRenderer.material = new Material(Shader.Find("Unlit/Color"));
+            bdRenderer.material.color = new Color(0.06f, 0.05f, 0.08f, 1f);
+            // Remove collider
+            var col = _backdrop.GetComponent<Collider>();
+            if (col != null) Object.Destroy(col);
+            // Position behind the player, large enough to fill background
+            var pPos = player.transform.position;
+            _backdrop.transform.position = pPos + Vector3.up * 2f - player.transform.forward * 1.5f;
+            _backdrop.transform.localScale = new Vector3(8f, 6f, 1f);
+            _backdrop.transform.LookAt(pPos + Vector3.up * 2f + player.transform.forward * 10f);
+
+            // ── Spotlight on the character ──
+            _spotlight = new GameObject("CreationSpotlight");
+            var light = _spotlight.AddComponent<Light>();
+            light.type = LightType.Spot;
+            light.color = new Color(1f, 0.95f, 0.85f);
+            light.intensity = 8f;
+            light.range = 10f;
+            light.spotAngle = 50f;
+            light.shadows = LightShadows.Soft;
+            _spotlight.transform.position = pPos + Vector3.up * 3.5f + player.transform.forward * 1.5f;
+            _spotlight.transform.LookAt(pPos + Vector3.up * 0.8f);
+
+            // ── Hide HUD and other overlays ──
+            SetCanvasesVisible(false);
+        }
+
+        void ExitCreationMode()
+        {
+            // ── Restore camera ──
+            var cam = Camera.main;
+            if (cam != null && _camOrigParent != null)
+            {
+                cam.transform.SetParent(_camOrigParent, false);
+                cam.transform.localPosition = _camOrigLocalPos;
+                cam.transform.localRotation = _camOrigLocalRot;
+            }
+
+            // ── Restore player rotation ──
+            var player = GameObject.FindWithTag("Player");
+            if (player != null)
+                player.transform.eulerAngles = new Vector3(0f, _playerOrigRotY, 0f);
+
+            // ── Clean up backdrop and light ──
+            if (_backdrop != null) { Destroy(_backdrop); _backdrop = null; }
+            if (_spotlight != null) { Destroy(_spotlight); _spotlight = null; }
+
+            // ── Show HUD again ──
+            SetCanvasesVisible(true);
+        }
+
+        void HandleCharacterRotation()
+        {
+            var mouse = UnityEngine.InputSystem.Mouse.current;
+            if (mouse == null) return;
+
+            // Only rotate when right mouse button is held OR when dragging in the right half of screen
+            bool mouseDown = mouse.leftButton.isPressed;
+            float mouseX = mouse.position.ReadValue().x;
+            bool inCharacterArea = mouseX > Screen.width * 0.48f; // right side of screen
+
+            if (mouseDown && inCharacterArea)
+            {
+                if (!_isDragging)
+                {
+                    _isDragging = true;
+                    _dragStartX = mouse.position.ReadValue().x;
+                }
+                else
+                {
+                    float deltaX = mouse.position.ReadValue().x - _dragStartX;
+                    _dragStartX = mouse.position.ReadValue().x;
+                    _charRotation -= deltaX * 0.5f;
+
+                    var player = GameObject.FindWithTag("Player");
+                    if (player != null)
+                        player.transform.eulerAngles = new Vector3(0f, _charRotation, 0f);
+                }
+            }
+            else
+            {
+                _isDragging = false;
+            }
+        }
+
+        void SetCanvasesVisible(bool visible)
+        {
+            // Hide/show all canvases except this one
+            var names = new[] { "StatsCanvas", "HUD", "DialogueCanvas" };
+            foreach (var name in names)
+            {
+                var go = GameObject.Find(name);
+                if (go != null) go.SetActive(visible);
+            }
         }
 
         // ═══════════════════════════════════════════════════════════════════
