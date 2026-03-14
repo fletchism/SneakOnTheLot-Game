@@ -393,52 +393,50 @@ namespace SOTL.Player
         {
             var player = GameObject.FindWithTag("Player");
             if (player == null) return;
+            var cam = Camera.main;
+            if (cam == null) return;
 
             _playerOrigRotY = player.transform.eulerAngles.y;
+            var playerPos = player.transform.position;
 
-            // ── Camera: detach from rig, position in front of player ──
-            var cam = Camera.main;
-            if (cam != null)
-            {
-                _camOrigParent   = cam.transform.parent;
-                _camOrigLocalPos = cam.transform.localPosition;
-                _camOrigLocalRot = cam.transform.localRotation;
+            // ── Camera: detach from rig ──
+            _camOrigParent   = cam.transform.parent;
+            _camOrigLocalPos = cam.transform.localPosition;
+            _camOrigLocalRot = cam.transform.localRotation;
+            cam.transform.SetParent(null, true);
 
-                // Detach from camera rig
-                cam.transform.SetParent(null, true);
+            // ── Position camera directly in front of player ──
+            // Use world directions so we don't depend on player's current facing
+            var toCamera = player.transform.forward; // current forward before we change it
+            var camPos = playerPos + toCamera * 3.0f + Vector3.up * 1.0f;
+            cam.transform.position = camPos;
 
-                // Position camera in front of player, at chest height
-                var playerPos = player.transform.position;
-                var camPos = playerPos + Vector3.up * 1.0f + player.transform.forward * 2.8f;
+            // ── Face player toward camera ──
+            player.transform.LookAt(new Vector3(camPos.x, playerPos.y, camPos.z));
+            _charRotation = player.transform.eulerAngles.y;
 
-                cam.transform.position = camPos;
+            // ── Camera looks left of player so character appears on right of screen ──
+            var lookTarget = playerPos + Vector3.up * 0.95f + player.transform.right * -0.7f;
+            cam.transform.LookAt(lookTarget);
 
-                // Look slightly LEFT of player so character appears on the right side of screen
-                var lookTarget = playerPos + Vector3.up * 0.95f - player.transform.right * 0.8f;
-                cam.transform.LookAt(lookTarget);
+            // ── Backdrop: 3D quad behind the player ──
+            // "Behind player" = away from camera = opposite of camera-to-player direction
+            var camToPlayer = (playerPos - camPos).normalized;
+            var backdropPos = playerPos + camToPlayer * 2.0f + Vector3.up * 1.5f;
 
-                // Face the player toward the camera
-                player.transform.LookAt(new Vector3(camPos.x, playerPos.y, camPos.z));
-                _charRotation = player.transform.eulerAngles.y;
-            }
-
-            // ── Backdrop: large 3D quad behind the player ──
             _backdrop = GameObject.CreatePrimitive(PrimitiveType.Quad);
             _backdrop.name = "CreationBackdrop";
-            // Remove collider so it doesn't interfere with gameplay
             var col = _backdrop.GetComponent<Collider>();
             if (col != null) Object.Destroy(col);
-            // Use URP Unlit material
+
             var bdMat = new Material(Shader.Find("Universal Render Pipeline/Unlit"));
             bdMat.color = new Color(0.06f, 0.05f, 0.08f, 1f);
             _backdrop.GetComponent<Renderer>().material = bdMat;
-            // Position behind the player relative to camera view
-            var camFwd = cam.transform.forward;
-            var behindPlayer = player.transform.position - camFwd * 2.5f;
-            _backdrop.transform.position = behindPlayer + Vector3.up * 1.5f;
+
+            _backdrop.transform.position = backdropPos;
             _backdrop.transform.localScale = new Vector3(15f, 10f, 1f);
-            // Face the camera
-            _backdrop.transform.rotation = cam.transform.rotation;
+            // Face TOWARD the camera (quad default faces +Z, so LookAt camera)
+            _backdrop.transform.LookAt(camPos);
 
             // ── Spotlight on the character ──
             _spotlight = new GameObject("CreationSpotlight");
@@ -449,8 +447,9 @@ namespace SOTL.Player
             light.range = 10f;
             light.spotAngle = 50f;
             light.shadows = LightShadows.Soft;
-            _spotlight.transform.position = player.transform.position + Vector3.up * 3.5f + player.transform.forward * 1.5f;
-            _spotlight.transform.LookAt(player.transform.position + Vector3.up * 0.8f);
+            // Position above and slightly in front of the player
+            _spotlight.transform.position = playerPos + Vector3.up * 3.5f - camToPlayer * 0.5f;
+            _spotlight.transform.LookAt(playerPos + Vector3.up * 0.8f);
 
             // ── Hide HUD and other overlays ──
             SetCanvasesVisible(false);
