@@ -422,28 +422,23 @@ namespace SOTL.Player
                 _charRotation = player.transform.eulerAngles.y;
             }
 
-            // ── Backdrop: UI overlay covering right side behind character ──
-            // Use a screen-space canvas so it always fills properly
-            var bdCanvasGO = new GameObject("CreationBackdropCanvas");
-            var bdCanvas = bdCanvasGO.AddComponent<Canvas>();
-            bdCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            bdCanvas.sortingOrder = 99; // Below our UI (100) but above everything else
-            var bdScaler = bdCanvasGO.AddComponent<CanvasScaler>();
-            bdScaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            bdScaler.referenceResolution = new Vector2(1920, 1080);
-
-            // Right-side dark panel
-            var bdPanel = new GameObject("BackdropPanel", typeof(RectTransform));
-            bdPanel.transform.SetParent(bdCanvasGO.transform, false);
-            var bdRT = bdPanel.GetComponent<RectTransform>();
-            bdRT.anchorMin = new Vector2(0.42f, 0f);
-            bdRT.anchorMax = Vector2.one;
-            bdRT.offsetMin = bdRT.offsetMax = Vector2.zero;
-            var bdImg = bdPanel.AddComponent<Image>();
-            bdImg.color = new Color(0.06f, 0.05f, 0.08f, 1f);
-            bdImg.raycastTarget = false;
-
-            _backdrop = bdCanvasGO;
+            // ── Backdrop: large 3D quad behind the player ──
+            _backdrop = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            _backdrop.name = "CreationBackdrop";
+            // Remove collider so it doesn't interfere with gameplay
+            var col = _backdrop.GetComponent<Collider>();
+            if (col != null) Object.Destroy(col);
+            // Use URP Unlit material
+            var bdMat = new Material(Shader.Find("Universal Render Pipeline/Unlit"));
+            bdMat.color = new Color(0.06f, 0.05f, 0.08f, 1f);
+            _backdrop.GetComponent<Renderer>().material = bdMat;
+            // Position behind the player relative to camera view
+            var camFwd = cam.transform.forward;
+            var behindPlayer = player.transform.position - camFwd * 2.5f;
+            _backdrop.transform.position = behindPlayer + Vector3.up * 1.5f;
+            _backdrop.transform.localScale = new Vector3(15f, 10f, 1f);
+            // Face the camera
+            _backdrop.transform.rotation = cam.transform.rotation;
 
             // ── Spotlight on the character ──
             _spotlight = new GameObject("CreationSpotlight");
